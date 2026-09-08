@@ -5,6 +5,12 @@
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "description": "SDKWork AIoT WeChat Mini Program application.",
+  "dependencies": {
+    "@sdkwork/sdk-common": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  },
   "scripts": {
     "dev": "pnpm dev:standalone",
     "dev:standalone": "pnpm exec sdkwork-app dev --root ../.. --deployment-profile standalone",

@@ -9,7 +9,8 @@ const STORAGE_KEYS = {
   accessToken: 'SDKWORK_ACCESS_TOKEN',
 };
 
-const DEFAULT_APP_API_BASE_URL = 'http://127.0.0.1:18082';
+const { resolveAiotAppSdkBaseUrl } = require('../config/resolveAppSdkBaseUrl');
+
 const DEFAULT_LIST_PAGE_SIZE = 20;
 const COMMAND_POLL_INTERVAL_MS = 400;
 const COMMAND_POLL_MAX_ATTEMPTS = 12;
@@ -23,7 +24,7 @@ function readStorage(key) {
 
 function createAiotAppSdkClientConfig() {
   return {
-    baseUrl: readStorage(STORAGE_KEYS.appApiBaseUrl) || DEFAULT_APP_API_BASE_URL,
+    baseUrl: readStorage(STORAGE_KEYS.appApiBaseUrl) || resolveAiotAppSdkBaseUrl(),
     authToken: readStorage(STORAGE_KEYS.authToken),
     accessToken: readStorage(STORAGE_KEYS.accessToken),
     platform: 'mini-program',
