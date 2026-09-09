@@ -11,7 +11,7 @@
  * This module is bundled by esbuild at build time so the `@sdkwork/sdk-common`
  * dependency is inlined into the mini program runtime.
  */
-import { resolveBaseUrl, splitBaseUrls } from '@sdkwork/sdk-common';
+import {resolveBaseUrlWithAlignProtocol, splitBaseUrls} from '@sdkwork/sdk-common';
 
 const APP_API_PREFIX = '/app/v3/api';
 const API_BASE_URL_ENV_KEY = 'SDKWORK_API_BASE_URL';
@@ -33,7 +33,7 @@ function normalizeApiBaseUrl(apiBaseUrl) {
 
 export function resolveAiotAppSdkBaseUrl(apiBaseUrl) {
   const [configured = ''] = splitBaseUrls(
-    apiBaseUrl ?? resolveBaseUrl({ envKey: API_BASE_URL_ENV_KEY }).url,
+    apiBaseUrl ?? resolveBaseUrlWithAlignProtocol({ envKey: API_BASE_URL_ENV_KEY }).url,
   );
   return normalizeApiBaseUrl(configured);
 }

@@ -3,7 +3,7 @@ import {
   readImportMetaEnv,
   readProcessEnv,
 } from '@sdkwork/aiot-app-core';
-import { resolveBaseUrl } from '@sdkwork/sdk-common';
+import {resolveBaseUrlWithAlignProtocol} from '@sdkwork/sdk-common';
 import {
   DEFAULT_LOCAL_EDGE_DEVICE_INGRESS_HTTP_URL,
   DEFAULT_LOCAL_EDGE_DEVICE_INGRESS_WEBSOCKET_URL,
@@ -24,8 +24,40 @@ function readRuntimeImportMetaEnv(): RuntimeImportMetaEnv {
   return (import.meta.env ?? {}) as RuntimeImportMetaEnv;
 }
 
+/**
+ * ENVIRONMENT_SPEC §6.3 protocol adaptation: the serving edge terminates HTTP
+ * and HTTPS on the same API host, so a browser-resolved explicit env base URL
+ * MUST use the page scheme — an http:// page targets the http:// origin (a
+ * TLS-less dev edge closes https:// connections) and an https:// page targets
+ * https:// (mixed-content blocks). Server/native runtimes keep the authored
+ * scheme.
+ */
+function alignBrowserBaseUrlPageProtocol(value: string): string {
+  if (typeof window === 'undefined') {
+    return value;
+  }
+  try {
+    const parsedUrl = new URL(value);
+    const pageProtocol = window.location.protocol;
+    if (
+      (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:')
+      && (pageProtocol === 'http:' || pageProtocol === 'https:')
+      && parsedUrl.protocol !== pageProtocol
+    ) {
+      parsedUrl.protocol = pageProtocol;
+      return parsedUrl.toString().replace(/\/$/u, '');
+    }
+  } catch {
+    // Keep the raw value for the existing downstream validation path.
+  }
+  return value;
+}
+
 export function readSdkBaseUrlEnvValue(key: string): string | undefined {
-  return readImportMetaEnv(key);
+  const value = readImportMetaEnv(key);
+  return typeof value === 'string' && value.trim().length > 0
+    ? alignBrowserBaseUrlPageProtocol(value.trim())
+    : undefined;
 }
 
 function readNodeEnvValue(key: string): string | undefined {
@@ -120,7 +152,7 @@ function resolveSdkApiBaseUrl(): string {
   // this package expect a bare origin — SDK-owned path prefixes (/app/v3/api
   // etc.) are appended by the generated SDK clients themselves, so path
   // preservation stays off.
-  return resolveBaseUrl({ envKey: 'SDKWORK_API_BASE_URL' }).url;
+  return resolveBaseUrlWithAlignProtocol({ envKey: 'SDKWORK_API_BASE_URL' }).url;
 }
 
 export function resolveAiotAppApiBaseUrl(): string {
@@ -141,7 +173,7 @@ export function resolveDriveAppApiBaseUrl(): string {
 
 export function isAgentsAppSdkConfigured(): boolean {
   // The unified single base-url key drives sibling-app SDK availability.
-  return resolveBaseUrl({ envKey: 'SDKWORK_API_BASE_URL' }).reason !== 'empty';
+  return resolveBaseUrlWithAlignProtocol({ envKey: 'SDKWORK_API_BASE_URL' }).reason !== 'empty';
 }
 
 export function resolveAgentsAppApiBaseUrl(): string {
@@ -149,7 +181,7 @@ export function resolveAgentsAppApiBaseUrl(): string {
 }
 
 export function isVoiceAppSdkConfigured(): boolean {
-  return resolveBaseUrl({ envKey: 'SDKWORK_API_BASE_URL' }).reason !== 'empty';
+  return resolveBaseUrlWithAlignProtocol({ envKey: 'SDKWORK_API_BASE_URL' }).reason !== 'empty';
 }
 
 export function resolveVoiceAppApiBaseUrl(): string {
