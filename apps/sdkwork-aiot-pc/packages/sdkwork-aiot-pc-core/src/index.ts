@@ -72,6 +72,9 @@ export {
   DEFAULT_LOCAL_PLATFORM_API_GATEWAY_HTTP_URL,
   DEFAULT_LOCAL_AGENTS_APP_HTTP_URL,
   DEFAULT_LOCAL_VOICE_APP_HTTP_URL,
+  // base-url-check: exempt (re-export of env-key name declarations from
+  // ./sdk/topologyEnvKeys; runtime resolution happens through
+  // @sdkwork/sdk-common resolveBaseUrl in the sdk client factories, §6.3)
   DEFAULT_AIOT_AGENTS_AGENT_ID,
   resolveDefaultAiotAgentId,
   VITE_SDKWORK_AIOT_APPLICATION_ADMIN_HTTP_URL,
