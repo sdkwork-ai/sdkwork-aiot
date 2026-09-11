@@ -1,10 +1,13 @@
 [package]
+rust-version.workspace = true
 name = "sdkwork-aiot-device-edge-runtime"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 description = "AIoT device protocol edge runtime for WebSocket, MQTT, UDP, OTA, and command delivery."
 
+[lints]
+workspace = true
 [dependencies]
 sdkwork-aiot-service-host.workspace = true
 sdkwork-aiot-observability.workspace = true

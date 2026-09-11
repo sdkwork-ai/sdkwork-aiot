@@ -1,8 +1,12 @@
 [package]
+rust-version.workspace = true
 name = "sdkwork-aiot-xiaozhi-simulator-ui"
 version = "0.1.0"
 edition = "2021"
 
+
+[lints]
+workspace = true
 [dependencies]
 crossterm = "0.28"
 http = "1.1"

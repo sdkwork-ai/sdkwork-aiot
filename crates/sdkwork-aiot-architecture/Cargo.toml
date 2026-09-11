@@ -1,9 +1,13 @@
 [package]
+rust-version.workspace = true
 name = "sdkwork-aiot-architecture"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 
+
+[lints]
+workspace = true
 [dependencies]
 
 [dev-dependencies]

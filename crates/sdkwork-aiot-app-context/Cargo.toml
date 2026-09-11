@@ -1,10 +1,14 @@
 [package]
+rust-version.workspace = true
 name = "sdkwork-aiot-app-context"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 description = "Maps SDKWork WebRequestContext into AIoT domain request context."
 
+
+[lints]
+workspace = true
 [dependencies]
 sdkwork-aiot-contract.workspace = true
 sdkwork-web-core.workspace = true

@@ -1,9 +1,13 @@
 [package]
+rust-version.workspace = true
 name = "sdkwork-aiot-storage-sqlx"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 
+
+[lints]
+workspace = true
 [dependencies]
 sdkwork-aiot-database-host.workspace = true
 sdkwork-database-config.workspace = true

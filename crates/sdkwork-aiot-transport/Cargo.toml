@@ -1,9 +1,13 @@
 [package]
+rust-version.workspace = true
 name = "sdkwork-aiot-transport"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 
+
+[lints]
+workspace = true
 [dependencies]
 sdkwork-aiot-contract.workspace = true
 sdkwork-aiot-protocol.workspace = true

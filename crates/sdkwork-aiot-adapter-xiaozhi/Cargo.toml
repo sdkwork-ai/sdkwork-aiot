@@ -1,9 +1,13 @@
 [package]
+rust-version.workspace = true
 name = "sdkwork-aiot-adapter-xiaozhi"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 
+
+[lints]
+workspace = true
 [dependencies]
 sdkwork-aiot-protocol.workspace = true
 sdkwork-aiot-security.workspace = true

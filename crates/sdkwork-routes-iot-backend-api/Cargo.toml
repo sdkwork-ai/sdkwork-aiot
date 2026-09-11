@@ -1,4 +1,5 @@
 [package]
+rust-version.workspace = true
 name = "sdkwork-routes-iot-backend-api"
 edition.workspace = true
 version.workspace = true
@@ -6,6 +7,9 @@ license.workspace = true
 description = "SDKWork AIoT backend-api Axum router with sdkwork-web-framework integration."
 build = "build.rs"
 
+
+[lints]
+workspace = true
 [dependencies]
 axum.workspace = true
 http-body-util.workspace = true
