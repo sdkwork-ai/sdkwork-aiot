@@ -11,7 +11,7 @@ Operator checklist for promoting SDKWork AIoT `0.1.x` to production.
 ## Build And Package
 
 ```powershell
-cd E:\sdkwork-space\sdkwork-aiot
+cd <workspace-root>/sdkwork-aiot
 pnpm release:build
 pnpm release:package
 pnpm release:preflight
