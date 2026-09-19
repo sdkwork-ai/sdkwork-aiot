@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "appId": "sdkwork-aiot-pc",
+  "declarations": [
+    {
+      "appResourceType": "aiot.firmware_artifact",
+      "appResourceIdKind": "entity",
+      "scene": "firmware-upload",
+      "source": "sdkwork-aiot-pc",
+      "uploadProfileCode": "archive",
+      "retention": "long_term",
+      "purpose": "IoT device firmware artifact uploaded from the admin console so a device model can reference a flashable image."
+    }
+  ]
+}

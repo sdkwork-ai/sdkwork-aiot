@@ -6,10 +6,7 @@ import { isBlank } from '@sdkwork/utils';
 
 import { getAiotBackendSdkClient } from '../sdk/aiotBackendSdkClient';
 import { getDriveAppSdkClient } from '../sdk/driveAppSdkClient';
-
-const AIOT_FIRMWARE_APP_RESOURCE_TYPE = 'aiot-firmware-artifact';
-const AIOT_FIRMWARE_UPLOAD_SCENE = 'aiot_firmware_upload';
-const AIOT_FIRMWARE_UPLOAD_SOURCE = 'aiot_pc_admin';
+import { AIOT_PC_FIRMWARE_ARTIFACT_UPLOAD } from '../sdk/uploadDeclaration';
 
 export interface UploadAiotFirmwareArtifactInput {
   file: File;
