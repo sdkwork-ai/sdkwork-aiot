@@ -55,6 +55,7 @@
     "@sdkwork/aiot-pc-console-iot": "workspace:*",
     "@sdkwork/aiot-pc-console-voice": "workspace:*",
     "@sdkwork/aiot-pc-core": "workspace:*",
+    "@sdkwork/iam-credential-entry": "workspace:*",
     "@tailwindcss/vite": "^4.2.2",
     "tailwindcss": "^4.2.2"
   },
