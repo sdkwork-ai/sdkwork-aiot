@@ -71,10 +71,10 @@ export async function uploadAiotFirmwareArtifactToDrive(
   const driveClient = getDriveAppSdkClient();
   const uploadResult = await driveClient.uploader.uploadArchive({
     file: input.file,
-    appResourceType: AIOT_FIRMWARE_APP_RESOURCE_TYPE,
+    appResourceType: AIOT_PC_FIRMWARE_ARTIFACT_UPLOAD.appResourceType,
     appResourceId: artifactKey,
-    scene: AIOT_FIRMWARE_UPLOAD_SCENE,
-    source: AIOT_FIRMWARE_UPLOAD_SOURCE,
+    scene: AIOT_PC_FIRMWARE_ARTIFACT_UPLOAD.scene,
+    source: AIOT_PC_FIRMWARE_ARTIFACT_UPLOAD.source,
     fileFingerprint: buildUploaderFingerprint(input.file, sha256),
     originalFileName: input.file.name,
     contentType: input.file.type.trim() || 'application/octet-stream',
