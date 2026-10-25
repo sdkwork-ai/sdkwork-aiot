@@ -10,12 +10,12 @@ Canonical standards are indexed by `../../../sdkwork-specs/README.md`; agent ent
 
 ## Application Identity
 
-Read `sdkwork.app.config.json` when work touches Mini Program behavior, runtime configuration, SDK wiring, release metadata, packaging, or app-owned capabilities. `etc/` is the concrete source configuration authority. This surface delegates runtime topology to `../../specs/topology.spec.json` through `etc/sdkwork.deployment.config.json#parentTopologySpec`; it must not own a competing topology. Root `../../sdkwork.workflow.json` remains the release authority.
+Read `agent.app.config.json` when work touches Mini Program behavior, runtime configuration, SDK wiring, release metadata, packaging, or app-owned capabilities. `etc/` is the concrete source configuration authority. This surface delegates runtime topology to `../../specs/topology.spec.json` through `etc/sdkwork.deployment.config.json#parentTopologySpec`; it must not own a competing topology. Root `../../sdkwork.workflow.json` remains the release authority.
 
 ## Local Dictionary Structure
 
 - `AGENTS.md`: nearest application execution entrypoint.
-- `sdkwork.app.config.json`: Mini Program identity and DRAFT release declaration.
+- `agent.app.config.json`: Mini Program identity and DRAFT release declaration.
 - `etc/`: deployable-root source configuration and parent topology delegation.
 - `specs/`: application contracts; `specs/component.spec.json` is the machine-readable component authority.
 - `src/`: WeChat Mini Program source files.

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const manifestPath = path.join(repoRoot, 'sdkwork.app.config.json');
+const manifestPath = path.join(repoRoot, 'agent.app.config.json');
 
 function readManifest() {
   return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -95,4 +95,4 @@ const manifest = readManifest();
 validateReleasePackages(manifest);
 validateDeploymentProfiles(manifest);
 validateSecurity(manifest);
-console.log('sdkwork.app.config.json validation passed');
+console.log('agent.app.config.json validation passed');

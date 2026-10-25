@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-test('sdkwork.app.config.json satisfies release and deployment manifest rules', () => {
+test('agent.app.config.json satisfies release and deployment manifest rules', () => {
   const result = spawnSync(
     process.execPath,
     [path.join(repoRoot, 'scripts/dev/validate-app-manifest.mjs')],

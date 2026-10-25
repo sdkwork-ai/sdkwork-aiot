@@ -33,13 +33,13 @@ test('release package script resolves platform-specific release binaries', async
   );
 });
 
-test('release package targets align with sdkwork.app.config.json package ids', () => {
+test('release package targets align with agent.app.config.json package ids', () => {
   const releaseScript = fs.readFileSync(
     path.join(repoRoot, 'scripts/release-package.mjs'),
     'utf8',
   );
   const appConfig = JSON.parse(
-    fs.readFileSync(path.join(repoRoot, 'sdkwork.app.config.json'), 'utf8'),
+    fs.readFileSync(path.join(repoRoot, 'agent.app.config.json'), 'utf8'),
   );
   const packageIds = new Set(
     (appConfig.artifacts?.installConfig?.packages ?? []).map((pkg) => pkg.id),

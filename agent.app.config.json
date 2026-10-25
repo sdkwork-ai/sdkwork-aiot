@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "kind": "sdkwork.app",
+  "kind": "agent.app",
   "app": {
     "key": "sdkwork-aiot",
     "name": "SDKWork AIoT",
@@ -261,7 +261,7 @@
         "workspaceRoot": ".",
         "framework": "react-vite-rust-axum",
         "packageManager": "pnpm",
-          "configurationAuthority": "sdkwork.app.config.json"
+          "configurationAuthority": "agent.app.config.json"
       }
     }
   },

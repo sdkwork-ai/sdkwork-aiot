@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const appConfigPath = path.join(root, 'sdkwork.app.config.json');
+const appConfigPath = path.join(root, 'agent.app.config.json');
 
 export function resolveEnabledPackageIds(appConfig = readAppConfig()) {
   return (appConfig.artifacts?.installConfig?.packages ?? [])

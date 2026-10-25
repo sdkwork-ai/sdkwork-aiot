@@ -23,7 +23,7 @@ pnpm release:preflight
 - `artifacts/release/windows/x64/server.zip`
 - matching CycloneDX SBOM files under `artifacts/release/sbom/`
 
-Upload each archive and SBOM to the URL declared in `sdkwork.app.config.json`.
+Upload each archive and SBOM to the URL declared in `agent.app.config.json`.
 
 ## Topology Selection
 
@@ -91,7 +91,7 @@ Confirm:
 ## Rollback
 
 1. Restore previous CDN binaries using prior `release-packages.manifest.json` checksums.
-2. Revert `sdkwork.app.config.json` package checksums to the previous release tag.
+2. Revert `agent.app.config.json` package checksums to the previous release tag.
 3. Roll database forward-only migrations only with an approved down plan from `database/migrations/`.
 
 ## References

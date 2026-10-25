@@ -494,7 +494,7 @@ fn workspace_does_not_use_forbidden_crate_names() {
 #[test]
 fn app_manifest_declares_multi_surface_rust_workspace() {
     let manifest =
-        fs::read_to_string(workspace_root().join("sdkwork.app.config.json")).expect("app manifest");
+        fs::read_to_string(workspace_root().join("agent.app.config.json")).expect("app manifest");
 
     assert!(manifest.contains(r#""appType": "APP_REACT""#));
     assert!(manifest.contains(r#""family": "web""#));

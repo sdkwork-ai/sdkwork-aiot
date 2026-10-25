@@ -23,14 +23,14 @@ const CONSTANTS_PATH = path.join(appRoot, 'packages/sdkwork-aiot-pc-core/src/sdk
 /**
  * Locate the application config that owns this root.
  *
- * A plain application root has its own `sdkwork.app.config.json`. A `-common` root does not:
+ * A plain application root has its own `agent.app.config.json`. A `-common` root does not:
  * its identity is inherited from the hosting root, and which ancestor that is depends on the
  * repository layout, so the file is searched upwards rather than assumed at a fixed depth.
  */
 function findAppConfig(startDir) {
   let current = startDir;
   for (let depth = 0; depth < 4; depth += 1) {
-    const candidate = path.join(current, 'sdkwork.app.config.json');
+    const candidate = path.join(current, 'agent.app.config.json');
     if (fs.existsSync(candidate)) {
       return candidate;
     }
@@ -227,10 +227,10 @@ test('upload declaration constants agree on one source label', () => {
 
 test('upload declaration appId matches the application config', () => {
   // §18.4: the declaration must match the config, not merely a local constant.
-  assert.ok(APP_CONFIG_PATH, `no sdkwork.app.config.json found at or above ${appRoot}`);
+  assert.ok(APP_CONFIG_PATH, `no agent.app.config.json found at or above ${appRoot}`);
   const config = JSON.parse(fs.readFileSync(APP_CONFIG_PATH, 'utf8'));
   const appId = config.backend?.appId ?? config.app?.key;
-  assert.ok(appId, 'sdkwork.app.config.json does not declare an app identity.');
+  assert.ok(appId, 'agent.app.config.json does not declare an app identity.');
   assert.equal(loadDeclaration().appId, appId);
 });
 

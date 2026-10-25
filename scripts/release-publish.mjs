@@ -8,7 +8,7 @@ import { sbomOutputPath } from './sbom-generate.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifestPath = path.join(root, 'artifacts/release/release-packages.manifest.json');
-const appConfigPath = path.join(root, 'sdkwork.app.config.json');
+const appConfigPath = path.join(root, 'agent.app.config.json');
 
 function runNodeScript(relativePath, args = []) {
   const result = spawnSync(process.execPath, [path.join(root, relativePath), ...args], {
@@ -33,7 +33,7 @@ function main() {
   console.log('[release:publish] release candidate is ready for CDN upload:');
   for (const released of manifest.packages ?? []) {
     const pkg = packages.find((entry) => entry.id === released.id);
-    assert.ok(pkg?.enabled, `${released.id} must stay enabled in sdkwork.app.config.json`);
+    assert.ok(pkg?.enabled, `${released.id} must stay enabled in agent.app.config.json`);
     assert.equal(pkg.checksum, released.checksum, `${released.id} checksum drift detected`);
     const sbomPath = sbomOutputPath(released.id);
     assert.ok(existsSync(sbomPath), `missing SBOM for ${released.id}`);

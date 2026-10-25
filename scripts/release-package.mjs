@@ -153,7 +153,7 @@ async function main() {
   for (const sbomPath of sbomOutputs) {
     console.log(`[release:package] wrote ${path.relative(root, sbomPath)}`);
   }
-  console.log('[release:package] legacy archive output is isolated from sdkwork.app.config.json');
+  console.log('[release:package] legacy archive output is isolated from agent.app.config.json');
 }
 
 const isMain =

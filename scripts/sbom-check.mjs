@@ -55,7 +55,7 @@ function main() {
       assert.equal(
         sbomChecksum,
         pkg?.checksum,
-        `${packageId} SBOM checksum must match sdkwork.app.config.json`,
+        `${packageId} SBOM checksum must match agent.app.config.json`,
       );
     }
 
