@@ -78,7 +78,7 @@ test('sdkwork-aiot dev scripts use deployment-profile axis instead of retired ho
 });
 
 test('sdkwork-aiot declares sdkwork framework dependencies in workflow manifest', () => {
-  const workflow = read('sdkwork.workflow.json');
+  const workflow = read('agent.workflow.json');
   for (const dependency of [
     'sdkwork-web-framework',
     'sdkwork-database',

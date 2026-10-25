@@ -30,7 +30,7 @@ The AIoT server aligns on API contracts, SDK workspaces, topology, security post
 6. Do not integrate `sdkwork-discovery` until the repository exposes RPC/gRPC services.
 7. Integrate `sdkwork-drive` for all client-side file uploads through `@sdkwork/drive-app-sdk client.uploader.*`; business APIs accept Drive-backed `MediaResource` references only.
 8. Keep `sdkwork-aiot-device-edge-runtime` device ingress on the minimal transport stack documented in ADR 002; it is not an HTTP `*-api` surface and therefore does not require `sdkwork-web-framework` integration.
-9. Add GitHub packaging through `sdkwork.workflow.json` and `.github/workflows/package.yml` immediately.
+9. Add GitHub packaging through `agent.workflow.json` and `.github/workflows/package.yml` immediately.
 10. Require route manifests and OpenAPI authorities to declare `WebRequestContext` and `apiSurface` metadata immediately.
 11. Expose repository-root scripts through the standard `dev`, `api`, `sdk`, `gateway`, `release`, `deploy`, `topology`, and `sbom` command families without application-code prefixes.
 
@@ -38,7 +38,7 @@ The AIoT server aligns on API contracts, SDK workspaces, topology, security post
 
 | Phase | Scope | Exit criteria | Status |
 | --- | --- | --- | --- |
-| A | Workflow, root dictionary, route/OpenAPI metadata | `sdkwork.workflow.json`, route manifests, OpenAPI extensions, architecture tests | Done |
+| A | Workflow, root dictionary, route/OpenAPI metadata | `agent.workflow.json`, route manifests, OpenAPI extensions, architecture tests | Done |
 | B | Web framework core adoption | `sdkwork-web-framework` workspace deps; custom transport uses framework context + interceptor semantics | Done |
 | C | Route crate split + Axom servers | `sdkwork-routes-iot-app-api`, `sdkwork-routes-iot-backend-api`, Tokio/Axum service shells | Done |
 | D | Database framework adoption | `sdkwork-database-config` bootstrap + `sdkwork-database-sqlx` pool helpers; repository SQL via sqlx pools | Done |

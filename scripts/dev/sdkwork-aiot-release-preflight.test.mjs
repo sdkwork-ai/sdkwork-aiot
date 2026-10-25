@@ -26,7 +26,7 @@ test('release preflight delegates to the workflow facade and stays draft fail-cl
     packageJson.scripts?.['release:preflight'] ?? '',
     /sdkwork-app release:preflight/u,
   );
-  const workflow = JSON.parse(fs.readFileSync(path.join(repoRoot, 'sdkwork.workflow.json'), 'utf8'));
+  const workflow = JSON.parse(fs.readFileSync(path.join(repoRoot, 'agent.workflow.json'), 'utf8'));
   assert.ok(workflow.lifecycle?.preflight?.length > 0);
   assert.equal(workflow.publish?.githubRelease, false);
   const thinWorkflow = fs.readFileSync(path.join(repoRoot, '.github/workflows/package.yml'), 'utf8');

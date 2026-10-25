@@ -140,7 +140,7 @@ for (const retiredComponent of ['edgeGateway', 'appApi', 'adminApi']) {
   assert.equal(spec.components?.[retiredComponent], undefined);
 }
 assert.equal(spec.scripts, undefined, 'shared sdkwork-app facade owns dev orchestration');
-assert.equal(spec.packaging, undefined, 'sdkwork.workflow.json owns package targets');
+assert.equal(spec.packaging, undefined, 'agent.workflow.json owns package targets');
 
 for (const [profileId, profilePath] of Object.entries(spec.profileFiles ?? {})) {
   assert.ok(fs.existsSync(path.join(repoRoot, profilePath)), `${profilePath} should exist for ${profileId}`);

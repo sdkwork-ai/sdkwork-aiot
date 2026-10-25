@@ -112,7 +112,7 @@
     {
       "file": "GITHUB_WORKFLOW_SPEC.md",
       "path": "../sdkwork-specs/GITHUB_WORKFLOW_SPEC.md",
-      "purpose": "sdkwork.workflow.json and reusable GitHub packaging workflow integration."
+      "purpose": "agent.workflow.json and reusable GitHub packaging workflow integration."
     },
     {
       "file": "APP_RUNTIME_TOPOLOGY_SPEC.md",

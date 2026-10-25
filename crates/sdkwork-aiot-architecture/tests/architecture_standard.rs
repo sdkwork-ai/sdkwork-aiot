@@ -60,11 +60,11 @@ fn openapi_permission_for_operation(document: &str, operation_id: &str) -> Optio
 #[test]
 fn github_packaging_workflow_is_declared() {
     let root = workspace_root();
-    let workflow = root.join("sdkwork.workflow.json");
+    let workflow = root.join("agent.workflow.json");
     let package_workflow = root.join(".github/workflows/package.yml");
 
-    assert!(workflow.exists(), "sdkwork.workflow.json is required");
-    let workflow_text = fs::read_to_string(&workflow).expect("sdkwork.workflow.json");
+    assert!(workflow.exists(), "agent.workflow.json is required");
+    let workflow_text = fs::read_to_string(&workflow).expect("agent.workflow.json");
     assert!(workflow_text.contains(r#""id": "sdkwork-aiot""#));
     assert!(workflow_text.contains("sdkwork-web-framework"));
     assert!(workflow_text.contains("sdkwork-database"));
@@ -74,7 +74,7 @@ fn github_packaging_workflow_is_declared() {
         ".github/workflows/package.yml is required"
     );
     let package_text = fs::read_to_string(&package_workflow).expect("package workflow");
-    assert!(package_text.contains("sdkwork.workflow.json"));
+    assert!(package_text.contains("agent.workflow.json"));
     assert!(package_text.contains("sdkwork-github-workflow"));
 }
 
@@ -204,7 +204,7 @@ fn api_assembly_bootstraps_shared_device_database() {
 #[test]
 fn github_packaging_workflow_declares_sdkwork_drive() {
     let workflow_text =
-        fs::read_to_string(workspace_root().join("sdkwork.workflow.json")).expect("workflow");
+        fs::read_to_string(workspace_root().join("agent.workflow.json")).expect("workflow");
     assert!(workflow_text.contains("sdkwork-drive"));
 }
 
@@ -256,7 +256,7 @@ fn openapi_media_source_includes_drive() {
 #[test]
 fn github_packaging_workflow_declares_sdkwork_utils() {
     let workflow_text =
-        fs::read_to_string(workspace_root().join("sdkwork.workflow.json")).expect("workflow");
+        fs::read_to_string(workspace_root().join("agent.workflow.json")).expect("workflow");
     assert!(workflow_text.contains("sdkwork-utils"));
 }
 

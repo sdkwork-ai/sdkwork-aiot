@@ -324,6 +324,6 @@
     "alignedToSdkworkSpecs": "2026-07-20",
     "deploymentConfig": "etc/sdkwork.deployment.config.json",
     "topologySpec": "specs/topology.spec.json",
-    "workflowManifest": "sdkwork.workflow.json"
+    "workflowManifest": "agent.workflow.json"
   }
 }

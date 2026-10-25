@@ -8,4 +8,4 @@ Repository-local developer and release tools for the SDKWork AIoT server.
 - Topology validation: `../sdkwork-app-topology`
 - Contract tests: `scripts/dev/*.test.mjs`
 
-Shared SDKWork tooling is consumed from sibling repositories declared in `sdkwork.workflow.json`.
+Shared SDKWork tooling is consumed from sibling repositories declared in `agent.workflow.json`.
