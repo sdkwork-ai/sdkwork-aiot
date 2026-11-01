@@ -14,7 +14,7 @@ node_modules/
 .env.test.local
 .env.staging.local
 .env.production.local
-.env.postgres
+config/host/postgres.env
 .env.release.local
 # Release binaries are built locally/CI; keep manifest for checksum drift checks.
 artifacts/
@@ -28,7 +28,7 @@ artifacts/release/sdkwork-aiot-*
 **/.runtime/
 **/target/
 !.env.*.example
-!.env.postgres.example
+!config/host/postgres.env.example
 dist/
 **/dist/
 coverage/
