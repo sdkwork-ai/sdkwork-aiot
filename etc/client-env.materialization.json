@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.client-env-materialization",
+  "application": "sdkwork-aiot",
+  "command": "pnpm workflow:materialize-client-env",
+  "deploymentConfig": "sdkwork.deployment.config.json",
+  "sourceIdentity": {
+    "deploymentProfileKeys": [
+      "SDKWORK_AIOT_DEPLOYMENT_PROFILE",
+      "SDKWORK_DEPLOYMENT_PROFILE"
+    ],
+    "environmentKeys": [
+      "SDKWORK_AIOT_ENVIRONMENT",
+      "SDKWORK_ENVIRONMENT"
+    ],
+    "profileIdKeys": [
+      "SDKWORK_AIOT_PROFILE_ID",
+      "SDKWORK_PROFILE_ID"
+    ]
+  },
+  "profiles": [
+    "standalone.development",
+    "cloud.development",
+    "standalone.production",
+    "cloud.production",
+    "standalone.test",
+    "standalone.staging",
+    "cloud.test",
+    "cloud.staging",
+    "standalone.demo",
+    "cloud.demo"
+  ],
+  "surfaces": [
+    {
+      "id": "sdkwork-aiot-h5",
+      "root": "apps/sdkwork-aiot-h5",
+      "format": "vite",
+      "runtimeTarget": "browser",
+      "includePrefixes": [],
+      "includeKeys": [],
+      "bindings": {
+        "VITE_SDKWORK_AIOT_APPLICATION_APP_HTTP_URL": {
+          "sources": [
+            "SDKWORK_AIOT_APPLICATION_APP_HTTP_URL"
+          ],
+          "required": false
+        },
+        "VITE_SDKWORK_AIOT_APPLICATION_ADMIN_HTTP_URL": {
+          "sources": [
+            "SDKWORK_AIOT_APPLICATION_ADMIN_HTTP_URL"
+          ],
+          "required": false
+        },
+        "VITE_SDKWORK_AIOT_EDGE_DEVICE_INGRESS_HTTP_URL": {
+          "sources": [
+            "SDKWORK_AIOT_EDGE_DEVICE_INGRESS_HTTP_URL"
+          ],
+          "required": false
+        },
+        "VITE_SDKWORK_AIOT_PLATFORM_API_GATEWAY_HTTP_URL": {
+          "sources": [
+            "SDKWORK_AIOT_PLATFORM_API_GATEWAY_HTTP_URL"
+          ],
+          "required": false
+        },
+        "VITE_SDKWORK_AIOT_APPLICATION_PUBLIC_HTTP_URL": {
+          "sources": [
+            "SDKWORK_AIOT_APPLICATION_PUBLIC_HTTP_URL"
+          ],
+          "required": false
+        },
+        "VITE_SDKWORK_AIOT_OUTBOX_WEBHOOK_URL": {
+          "sources": [
+            "SDKWORK_AIOT_OUTBOX_WEBHOOK_URL"
+          ],
+          "required": false
+        },
+        "VITE_SDKWORK_AIOT_FIRMWARE_DOWNLOAD_BASE_URL": {
+          "sources": [
+            "SDKWORK_AIOT_FIRMWARE_DOWNLOAD_BASE_URL"
+          ],
+          "required": false
+        },
+        "VITE_SDKWORK_CORS_ALLOWED_ORIGINS": {
+          "sources": [
+            "SDKWORK_CORS_ALLOWED_ORIGINS"
+          ],
+          "required": false
+        }
+      },
+      "constants": {
+        "VITE_SDKWORK_APPLICATION_CODE": "aiot",
+        "VITE_SDKWORK_SURFACE": "h5"
+      },
+      "requiredOutputKeys": [
+        "VITE_SDKWORK_ENVIRONMENT",
+        "VITE_SDKWORK_DEPLOYMENT_PROFILE",
+        "VITE_SDKWORK_PROFILE_ID",
+        "VITE_SDKWORK_RUNTIME_TARGET"
+      ]
+    },
+    {
+      "id": "sdkwork-aiot-pc",
+      "root": "apps/sdkwork-aiot-pc",
+      "format": "vite",
+      "runtimeTarget": "browser",
+      "includePrefixes": [],
+      "includeKeys": [],
+      "bindings": {
+        "VITE_SDKWORK_AIOT_APPLICATION_APP_HTTP_URL": {
+          "sources": [
+            "SDKWORK_AIOT_APPLICATION_APP_HTTP_URL"
+          ],
+          "required": false
+        },
+        "VITE_SDKWORK_AIOT_APPLICATION_ADMIN_HTTP_URL": {
+          "sources": [
+            "SDKWORK_AIOT_APPLICATION_ADMIN_HTTP_URL"
+          ],
+          "required": false
+        },
+        "VITE_SDKWORK_AIOT_EDGE_DEVICE_INGRESS_HTTP_URL": {
+          "sources": [
+            "SDKWORK_AIOT_EDGE_DEVICE_INGRESS_HTTP_URL"
+          ],
+          "required": false
+        },
+        "VITE_SDKWORK_AIOT_PLATFORM_API_GATEWAY_HTTP_URL": {
+          "sources": [
+            "SDKWORK_AIOT_PLATFORM_API_GATEWAY_HTTP_URL"
+          ],
+          "required": false
+        },
+        "VITE_SDKWORK_AIOT_APPLICATION_PUBLIC_HTTP_URL": {
+          "sources": [
+            "SDKWORK_AIOT_APPLICATION_PUBLIC_HTTP_URL"
+          ],
+          "required": false
+        },
+        "VITE_SDKWORK_AIOT_OUTBOX_WEBHOOK_URL": {
+          "sources": [
+            "SDKWORK_AIOT_OUTBOX_WEBHOOK_URL"
+          ],
+          "required": false
+        },
+        "VITE_SDKWORK_AIOT_FIRMWARE_DOWNLOAD_BASE_URL": {
+          "sources": [
+            "SDKWORK_AIOT_FIRMWARE_DOWNLOAD_BASE_URL"
+          ],
+          "required": false
+        },
+        "VITE_SDKWORK_CORS_ALLOWED_ORIGINS": {
+          "sources": [
+            "SDKWORK_CORS_ALLOWED_ORIGINS"
+          ],
+          "required": false
+        }
+      },
+      "constants": {
+        "VITE_SDKWORK_APPLICATION_CODE": "aiot",
+        "VITE_SDKWORK_SURFACE": "pc"
+      },
+      "requiredOutputKeys": [
+        "VITE_SDKWORK_ENVIRONMENT",
+        "VITE_SDKWORK_DEPLOYMENT_PROFILE",
+        "VITE_SDKWORK_PROFILE_ID",
+        "VITE_SDKWORK_RUNTIME_TARGET"
+      ]
+    }
+  ]
+}
