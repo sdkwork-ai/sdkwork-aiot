@@ -17,10 +17,30 @@
     "selectedColor": "#0891b2",
     "backgroundColor": "#ffffff",
     "list": [
-      { "pagePath": "pages/devices/index", "text": "设备" },
-      { "pagePath": "pages/iot/index", "text": "IoT" },
-      { "pagePath": "pages/voice/index", "text": "语音" },
-      { "pagePath": "pages/agent/index", "text": "智能体" }
+      {
+        "pagePath": "pages/devices/index",
+        "text": "设备",
+        "iconPath": "assets/tabbar/devices-outline.png",
+        "selectedIconPath": "assets/tabbar/devices-filled.png"
+      },
+      {
+        "pagePath": "pages/iot/index",
+        "text": "IoT",
+        "iconPath": "assets/tabbar/iot-outline.png",
+        "selectedIconPath": "assets/tabbar/iot-filled.png"
+      },
+      {
+        "pagePath": "pages/voice/index",
+        "text": "语音",
+        "iconPath": "assets/tabbar/voice-outline.png",
+        "selectedIconPath": "assets/tabbar/voice-filled.png"
+      },
+      {
+        "pagePath": "pages/agent/index",
+        "text": "智能体",
+        "iconPath": "assets/tabbar/agent-outline.png",
+        "selectedIconPath": "assets/tabbar/agent-filled.png"
+      }
     ]
   },
   "sitemapLocation": "sitemap.json"
