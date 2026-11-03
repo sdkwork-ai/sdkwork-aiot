@@ -182,6 +182,21 @@
           "iam:self"
         ]
       }
+    },
+    {
+      "id": "sdkwork-aiot-mini-program",
+      "root": "apps/sdkwork-aiot-mini-program",
+      "format": "mini-program",
+      "runtimeTarget": "mini-program",
+      "bindings": {},
+      "accessToken": {
+        "appId": "sdkwork-aiot-mini-program",
+        "tenantId": "100001",
+        "organizationId": "0",
+        "permissionScope": [
+          "iam:self"
+        ]
+      }
     }
   ]
 }
