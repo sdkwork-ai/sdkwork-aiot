@@ -8,11 +8,21 @@
     "officialWebsiteUrl": "https://sdkwork.com/apps/sdkwork-aiot",
     "appType": "APP_REACT"
   },
-  "backend": {},
+  "backend": {
+    "appId": "sdkwork-aiot-h5",
+    "tenantId": "100001",
+    "organizationId": "0",
+    "accessTokenPermissionScope": [
+      "iam:self"
+    ]
+  },
   "runtime": {
     "family": "web",
     "framework": "react-vite-h5",
-    "supportedDeploymentProfiles": ["standalone", "cloud"],
+    "supportedDeploymentProfiles": [
+      "standalone",
+      "cloud"
+    ],
     "defaultDeploymentProfile": "standalone"
   },
   "media": {
@@ -20,7 +30,9 @@
       "primary": {
         "id": "sdkwork-aiot-h5-primary-icon",
         "url": "https://cdn.sdkwork.com/apps/sdkwork-aiot/assets/icon-1024.png",
-        "metadata": { "generatedPlaceholder": true }
+        "metadata": {
+          "generatedPlaceholder": true
+        }
       },
       "platform": []
     },
@@ -29,8 +41,12 @@
   },
   "publish": {
     "status": "DRAFT",
-    "platforms": ["H5"],
-    "installPlatforms": ["H5"],
+    "platforms": [
+      "H5"
+    ],
+    "installPlatforms": [
+      "H5"
+    ],
     "defaultPackageId": "h5-universal-standalone-mobile-zip",
     "stores": []
   },
@@ -46,7 +62,10 @@
           "platform": "H5",
           "url": "https://cdn.sdkwork.com/apps/sdkwork-aiot/STABLE/0.1.0/sdkwork-aiot-h5-universal-standalone-mobile-zip-0.1.0.zip",
           "enabled": false,
-          "metadata": { "releaseBuildDeferred": true, "releaseAuthority": "sdkwork-aiot" },
+          "metadata": {
+            "releaseBuildDeferred": true,
+            "releaseAuthority": "sdkwork-aiot"
+          },
           "checksumAlgorithm": "SHA-256",
           "architecture": "universal",
           "profileBinding": "fixed",
@@ -63,7 +82,10 @@
           "platform": "H5",
           "url": "https://cdn.sdkwork.com/apps/sdkwork-aiot/STABLE/0.1.0/sdkwork-aiot-h5-universal-cloud-mobile-zip-0.1.0.zip",
           "enabled": false,
-          "metadata": { "releaseBuildDeferred": true, "releaseAuthority": "sdkwork-aiot" },
+          "metadata": {
+            "releaseBuildDeferred": true,
+            "releaseAuthority": "sdkwork-aiot"
+          },
           "checksumAlgorithm": "SHA-256",
           "architecture": "universal",
           "profileBinding": "fixed",
@@ -78,11 +100,16 @@
   "release": {
     "currentVersion": "0.1.0",
     "defaultChannel": "STABLE",
-    "latest": { "STABLE": "0.1.0" },
+    "latest": {
+      "STABLE": "0.1.0"
+    },
     "notes": [
       {
         "version": "0.1.0",
-        "packageIds": ["h5-universal-standalone-mobile-zip", "h5-universal-cloud-mobile-zip"],
+        "packageIds": [
+          "h5-universal-standalone-mobile-zip",
+          "h5-universal-cloud-mobile-zip"
+        ],
         "current": true
       }
     ]

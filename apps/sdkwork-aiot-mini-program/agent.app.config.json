@@ -8,11 +8,21 @@
     "officialWebsiteUrl": "https://sdkwork.com/apps/sdkwork-aiot",
     "appType": "APP_UNIAPP"
   },
-  "backend": {},
+  "backend": {
+    "appId": "sdkwork-aiot-mini-program",
+    "tenantId": "100001",
+    "organizationId": "0",
+    "accessTokenPermissionScope": [
+      "iam:self"
+    ]
+  },
   "runtime": {
     "family": "mini-program",
     "framework": "mp-weixin",
-    "supportedDeploymentProfiles": ["standalone", "cloud"],
+    "supportedDeploymentProfiles": [
+      "standalone",
+      "cloud"
+    ],
     "defaultDeploymentProfile": "standalone"
   },
   "media": {
@@ -20,7 +30,9 @@
       "primary": {
         "id": "sdkwork-aiot-mini-program-primary-icon",
         "url": "https://cdn.sdkwork.com/apps/sdkwork-aiot/assets/icon-1024.png",
-        "metadata": { "generatedPlaceholder": true }
+        "metadata": {
+          "generatedPlaceholder": true
+        }
       },
       "platform": []
     },
@@ -29,8 +41,12 @@
   },
   "publish": {
     "status": "DRAFT",
-    "platforms": ["MP_WEIXIN"],
-    "installPlatforms": ["MP_WEIXIN"],
+    "platforms": [
+      "MP_WEIXIN"
+    ],
+    "installPlatforms": [
+      "MP_WEIXIN"
+    ],
     "defaultPackageId": "mp-weixin-universal-standalone-mini-program-package",
     "stores": []
   },
@@ -88,7 +104,9 @@
   "release": {
     "currentVersion": "0.1.0",
     "defaultChannel": "STABLE",
-    "latest": { "STABLE": "0.1.0" },
+    "latest": {
+      "STABLE": "0.1.0"
+    },
     "notes": [
       {
         "version": "0.1.0",
