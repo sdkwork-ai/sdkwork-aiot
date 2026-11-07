@@ -219,6 +219,7 @@ mod tests {
             },
             kernel: KernelRuntimeClient::new("http://127.0.0.1:18280".to_string()).unwrap(),
             cloud: Arc::new(
+                // registry:allow test-only loopback stub; no production call site.
                 SdkworkAiClient::new_with_base_url("http://127.0.0.1:1").expect("client"),
             ),
             session_map: SessionMap::new(),
@@ -244,6 +245,7 @@ mod tests {
             },
             kernel: KernelRuntimeClient::new("http://127.0.0.1:18280".to_string()).unwrap(),
             cloud: Arc::new(
+                // registry:allow test-only loopback stub; no production call site.
                 SdkworkAiClient::new_with_base_url("http://127.0.0.1:1").expect("client"),
             ),
             session_map: SessionMap::new(),
