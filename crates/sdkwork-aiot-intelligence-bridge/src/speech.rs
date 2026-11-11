@@ -181,7 +181,6 @@ impl KernelSpeechPipeline {
             model: self.config.tts_model.clone(),
             voice: self.config.tts_voice.clone(),
             response_format: Some(self.config.tts_response_format.clone()),
-            metadata: None,
             speed: None,
         };
         let cloud = Arc::clone(&self.cloud);
