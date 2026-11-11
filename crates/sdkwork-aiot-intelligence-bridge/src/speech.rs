@@ -182,6 +182,7 @@ impl KernelSpeechPipeline {
             voice: self.config.tts_voice.clone(),
             response_format: Some(self.config.tts_response_format.clone()),
             speed: None,
+            ..Default::default()
         };
         let cloud = Arc::clone(&self.cloud);
         let raw = tokio::task::block_in_place(|| {
