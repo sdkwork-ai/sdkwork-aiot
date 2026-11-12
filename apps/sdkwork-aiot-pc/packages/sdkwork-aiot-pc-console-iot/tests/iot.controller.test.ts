@@ -60,6 +60,7 @@ describe("sdkwork-aiot-pc-console-iot controller", () => {
 
     expect(service.getCatalog).toHaveBeenLastCalledWith({
       nodeId: "node-gateway-shanghai",
+      page: 1,
     });
     expect(controller.getState().selectedNodeId).toBe("node-gateway-shanghai");
   });

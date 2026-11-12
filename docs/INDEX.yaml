@@ -35,6 +35,16 @@ entries:
     layer: architecture
     audience: [engineering, operator]
     status: ready
+  - id: device-settings-admin
+    path: docs/architecture/tech/TECH-device-settings-admin.md
+    layer: architecture
+    audience: [engineering, operator]
+    status: ready
+  - id: device-hardware-tools
+    path: docs/architecture/tech/TECH-device-hardware-tools.md
+    layer: architecture
+    audience: [engineering, operator]
+    status: ready
 domains:
   - name: iot-operations
     path: docs/runbooks/

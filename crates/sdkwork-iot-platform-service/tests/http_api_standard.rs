@@ -23,7 +23,7 @@ mod test_env {
             std::env::set_var("SDKWORK_AIOT_TRUST_PROXY_HEADERS", "1");
             std::env::set_var(
                 "SDKWORK_AIOT_DEV_PERMISSIONS",
-                "iot.devices.read,iot.twins.read,iot.commands.execute,iot.protocolAdapters.read,iot.runtime.read,iot.profiles.read,iot.devices.write,iot.sessions.read,iot.sessions.disconnect,iot.commands.read,iot.commands.cancel",
+                "iot.devices.read,iot.twins.read,iot.commands.execute,iot.protocolAdapters.read,iot.runtime.read,iot.profiles.read,iot.devices.write,iot.sessions.read,iot.sessions.disconnect,iot.commands.read,iot.commands.cancel,iot.deviceSettings.read,iot.deviceSettings.write",
             );
         });
     }
@@ -3126,7 +3126,12 @@ fn backend_typescript_sdk_exposes_firmware_crud_surface() {
 
     assert!(iot_api.contains("class IotDevicesSessionsApi"));
     assert!(iot_api.contains("async list(deviceId: string"));
-    assert!(iot_api.contains("async disconnect(deviceId: string, sessionId: string"));
+    assert!(iot_api.contains("async delete(deviceId: string, sessionId: string"));
+    assert!(iot_api.contains("class IotDevicesSettingsApi"));
+    assert!(iot_api.contains("async retrieve(deviceId: string"));
+    assert!(
+        iot_api.contains("async update(deviceId: string, body: AiotDeviceSettingsUpdateRequest")
+    );
     assert!(iot_api.contains("class IotDevicesCapabilitiesApi"));
     assert!(iot_api.contains("async cancel(deviceId: string, commandId: string"));
     assert!(iot_api.contains("class IotDevicesCredentialsApi"));
@@ -3301,7 +3306,7 @@ fn typescript_problem_code_catalogs_cover_observed_runtime_problem_codes() {
         backend_ts.contains("code: SdkWorkPlatformErrorCode;"),
         "backend generated TS SDK must model ProblemDetail.code as numeric platform error code"
     );
-    for code in observed_app.into_iter().chain(observed_backend.into_iter()) {
+    for code in observed_app.into_iter().chain(observed_backend) {
         let numeric = code
             .parse::<i32>()
             .unwrap_or_else(|_| panic!("runtime problem code {code} must be numeric"));
@@ -3591,8 +3596,8 @@ fn credential_repository_adapter_persists_and_lists_credentials() {
             .credential_repository()
             .expect("credential repository"),
     );
-    let repository =
-        Arc::new(adapter) as Arc<dyn sdkwork_iot_platform_service::AiotCredentialRepository>;
+    let repository: Arc<dyn sdkwork_iot_platform_service::AiotCredentialRepository> =
+        Arc::new(adapter);
 
     let admin = standard_admin_api_server()
         .expect("admin api server")
@@ -3777,4 +3782,915 @@ fn standard_route_manifest_documents_match_route_contracts() {
             .count();
         assert_eq!(routes.len(), contract_count);
     }
+}
+
+#[test]
+fn backend_device_settings_inherit_capability_model_defaults() {
+    let admin = standard_admin_api_server().expect("admin api server");
+
+    let created = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/devices HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.write\r\n\r\n{\"deviceId\":\"settings-device-001\",\"displayName\":\"Settings Speaker\",\"productId\":\"9001\"}",
+    )
+    .expect("create settings device");
+    assert!(created.starts_with("HTTP/1.1 201"));
+
+    let response = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/settings-device-001/settings HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.read\r\n\r\n",
+    )
+    .expect("retrieve device settings");
+    assert!(response.starts_with("HTTP/1.1 200"));
+    let body = response_body_json(&response);
+    assert_success_envelope(&body);
+    assert_eq!(
+        resource_data_pointer(&body, "/deviceId").and_then(serde_json::Value::as_str),
+        Some("settings-device-001")
+    );
+    assert_eq!(
+        resource_data_pointer(&body, "/productId").and_then(serde_json::Value::as_str),
+        Some("9001")
+    );
+    assert_eq!(
+        resource_data_pointer(&body, "/capabilityModelId").and_then(serde_json::Value::as_str),
+        Some("capmodel-xiaozhi-core")
+    );
+    assert_eq!(
+        resource_data_pointer(&body, "/revision").and_then(serde_json::Value::as_str),
+        Some("0")
+    );
+    let definitions = resource_data_pointer(&body, "/definitions")
+        .and_then(serde_json::Value::as_array)
+        .expect("settings definitions");
+    assert!(
+        definitions.len() >= 8,
+        "expected the standard xiaozhi settings schema, got {definitions:?}"
+    );
+    assert!(definitions.iter().any(|definition| {
+        definition
+            .get("settingKey")
+            .and_then(serde_json::Value::as_str)
+            == Some("audio.volume")
+            && definition.get("kind").and_then(serde_json::Value::as_str) == Some("integer")
+    }));
+    assert_eq!(
+        resource_data_pointer(&body, "/defaults/audio.volume").and_then(serde_json::Value::as_i64),
+        Some(60)
+    );
+    assert_eq!(
+        resource_data_pointer(&body, "/overrides")
+            .and_then(serde_json::Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_eq!(
+        resource_data_pointer(&body, "/effective/audio.volume").and_then(serde_json::Value::as_i64),
+        Some(60)
+    );
+    assert_eq!(
+        resource_data_pointer(&body, "/effective/assistant.wakeWord")
+            .and_then(serde_json::Value::as_str),
+        Some("你好小智")
+    );
+}
+
+#[test]
+fn backend_device_settings_update_persists_overrides_and_publishes_the_twin() {
+    let shared_repo = Arc::new(sdkwork_aiot_storage_sqlx::InMemorySqlxDeviceRepository::new());
+    let admin = standard_admin_api_server()
+        .expect("admin api server")
+        .with_device_repository(shared_repo.clone())
+        .with_twin_repository(shared_repo);
+
+    let created = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/devices HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.write\r\n\r\n{\"deviceId\":\"settings-device-002\",\"displayName\":\"Settings Speaker 2\",\"productId\":\"9001\"}",
+    )
+    .expect("create settings device");
+    assert!(created.starts_with("HTTP/1.1 201"));
+
+    let updated = handle_api_request_bytes(
+        &admin,
+        "PUT /backend/v3/api/iot/devices/settings-device-002/settings HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"expectedRevision\":\"0\",\"overrides\":{\"audio.volume\":35,\"assistant.wakeWord\":\"小智小智\",\"system.autoSleepSeconds\":600}}".as_bytes(),
+    )
+    .expect("update device settings");
+    assert!(updated.starts_with("HTTP/1.1 200"));
+    let updated_body = response_body_json(&updated);
+    assert_success_envelope(&updated_body);
+    assert_eq!(
+        resource_data_pointer(&updated_body, "/revision").and_then(serde_json::Value::as_str),
+        Some("1")
+    );
+    assert_eq!(
+        resource_data_pointer(&updated_body, "/overrides/audio.volume")
+            .and_then(serde_json::Value::as_i64),
+        Some(35)
+    );
+    assert_eq!(
+        resource_data_pointer(&updated_body, "/effective/audio.volume")
+            .and_then(serde_json::Value::as_i64),
+        Some(35)
+    );
+    assert_eq!(
+        resource_data_pointer(&updated_body, "/effective/display.brightness")
+            .and_then(serde_json::Value::as_i64),
+        Some(80)
+    );
+
+    let reread = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/settings-device-002/settings HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.read\r\n\r\n",
+    )
+    .expect("reread device settings");
+    let reread_body = response_body_json(&reread);
+    assert_eq!(
+        resource_data_pointer(&reread_body, "/revision").and_then(serde_json::Value::as_str),
+        Some("1")
+    );
+    assert_eq!(
+        resource_data_pointer(&reread_body, "/overrides/system.autoSleepSeconds")
+            .and_then(serde_json::Value::as_i64),
+        Some(600)
+    );
+
+    let twin = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/settings-device-002/twin HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.twins.read\r\n\r\n",
+    )
+    .expect("retrieve settings twin");
+    assert!(twin.starts_with("HTTP/1.1 200"));
+    let twin_body = response_body_json(&twin);
+    assert_eq!(
+        resource_data_pointer(&twin_body, "/desired/settings/audio.volume")
+            .and_then(serde_json::Value::as_i64),
+        Some(35)
+    );
+    assert_eq!(
+        resource_data_pointer(&twin_body, "/desired/settings/display.brightness")
+            .and_then(serde_json::Value::as_i64),
+        Some(80)
+    );
+}
+
+#[test]
+fn backend_device_settings_reject_invalid_values_unknown_keys_and_read_only_keys() {
+    let admin = standard_admin_api_server().expect("admin api server");
+
+    let created = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/devices HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.write\r\n\r\n{\"deviceId\":\"settings-device-003\",\"displayName\":\"Settings Speaker 3\",\"productId\":\"9001\"}",
+    )
+    .expect("create settings device");
+    assert!(created.starts_with("HTTP/1.1 201"));
+
+    let out_of_range = handle_api_request_bytes(
+        &admin,
+        b"PUT /backend/v3/api/iot/devices/settings-device-003/settings HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"overrides\":{\"audio.volume\":140}}",
+    )
+    .expect("update out of range volume");
+    assert!(out_of_range.starts_with("HTTP/1.1 422"));
+    assert_problem_contains_code(&out_of_range, SdkWorkResultCode::ValidationError);
+    let problem = response_body_json(&out_of_range);
+    let errors = problem
+        .get("errors")
+        .and_then(serde_json::Value::as_array)
+        .expect("field errors");
+    assert!(errors.iter().any(|error| {
+        error.get("field").and_then(serde_json::Value::as_str) == Some("overrides.audio.volume")
+            && error.get("code").and_then(serde_json::Value::as_i64) == Some(40011)
+    }));
+
+    let unknown_key = handle_api_request_bytes(
+        &admin,
+        b"PUT /backend/v3/api/iot/devices/settings-device-003/settings HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"overrides\":{\"audio.bass\":10}}",
+    )
+    .expect("update unknown setting");
+    assert!(unknown_key.starts_with("HTTP/1.1 422"));
+
+    let wrong_type = handle_api_request_bytes(
+        &admin,
+        b"PUT /backend/v3/api/iot/devices/settings-device-003/settings HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"overrides\":{\"security.allowRemoteReboot\":\"yes\"}}",
+    )
+    .expect("update wrong value type");
+    assert!(wrong_type.starts_with("HTTP/1.1 422"));
+
+    let missing_overrides = handle_api_request_bytes(
+        &admin,
+        b"PUT /backend/v3/api/iot/devices/settings-device-003/settings HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{}",
+    )
+    .expect("update without overrides");
+    assert!(missing_overrides.starts_with("HTTP/1.1 400"));
+    assert_problem_contains_code(&missing_overrides, SdkWorkResultCode::MissingRequiredField);
+}
+
+#[test]
+fn backend_device_settings_enforce_optimistic_concurrency_and_reset() {
+    let admin = standard_admin_api_server().expect("admin api server");
+
+    let created = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/devices HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.write\r\n\r\n{\"deviceId\":\"settings-device-004\",\"displayName\":\"Settings Speaker 4\",\"productId\":\"9001\"}",
+    )
+    .expect("create settings device");
+    assert!(created.starts_with("HTTP/1.1 201"));
+
+    let first_write = handle_api_request_bytes(
+        &admin,
+        b"PUT /backend/v3/api/iot/devices/settings-device-004/settings HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"overrides\":{\"audio.volume\":20}}",
+    )
+    .expect("first settings write");
+    assert!(first_write.starts_with("HTTP/1.1 200"));
+
+    let conflict = handle_api_request_bytes(
+        &admin,
+        b"PUT /backend/v3/api/iot/devices/settings-device-004/settings HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"expectedRevision\":\"0\",\"overrides\":{\"audio.volume\":10}}",
+    )
+    .expect("stale settings write");
+    assert!(conflict.starts_with("HTTP/1.1 409"));
+    assert_problem_contains_code(&conflict, SdkWorkResultCode::Conflict);
+
+    let reset = handle_api_request_bytes(
+        &admin,
+        b"DELETE /backend/v3/api/iot/devices/settings-device-004/settings HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n",
+    )
+    .expect("reset device settings");
+    assert!(reset.starts_with("HTTP/1.1 204"));
+
+    let reread = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/settings-device-004/settings HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.read\r\n\r\n",
+    )
+    .expect("reread reset settings");
+    let body = response_body_json(&reread);
+    assert_eq!(
+        resource_data_pointer(&body, "/overrides")
+            .and_then(serde_json::Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_eq!(
+        resource_data_pointer(&body, "/effective/audio.volume").and_then(serde_json::Value::as_i64),
+        Some(60)
+    );
+    assert_eq!(
+        resource_data_pointer(&body, "/revision").and_then(serde_json::Value::as_str),
+        Some("2")
+    );
+}
+
+#[test]
+fn backend_device_settings_enforce_permission_and_tenant_scope() {
+    let admin = standard_admin_api_server().expect("admin api server");
+
+    let created = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/devices HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 23101\r\nX-Sdkwork-Permission-Scope: iot.devices.write\r\n\r\n{\"deviceId\":\"settings-device-005\",\"displayName\":\"Settings Speaker 5\",\"productId\":\"9001\"}",
+    )
+    .expect("create settings device");
+    assert!(created.starts_with("HTTP/1.1 201"));
+
+    let wrong_permission = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/settings-device-005/settings HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 23101\r\nX-Sdkwork-Permission-Scope: iot.devices.read\r\n\r\n",
+    )
+    .expect("settings with device read permission");
+    assert!(wrong_permission.starts_with("HTTP/1.1 403"));
+    assert_problem_contains_code(&wrong_permission, SdkWorkResultCode::PermissionRequired);
+
+    let wrong_scope = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/settings-device-005/settings HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 23102\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.read\r\n\r\n",
+    )
+    .expect("settings in another organization");
+    assert!(wrong_scope.starts_with("HTTP/1.1 404"));
+    assert_problem_contains_code(&wrong_scope, SdkWorkResultCode::NotFound);
+
+    let missing_device = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/no-such-device/settings HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 23101\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.read\r\n\r\n",
+    )
+    .expect("settings for a missing device");
+    assert!(missing_device.starts_with("HTTP/1.1 404"));
+}
+
+#[test]
+fn capability_model_routes_validate_and_expose_device_settings_schemas() {
+    let admin = standard_admin_api_server().expect("admin api server");
+
+    let retrieve = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/capability_models/capmodel-xiaozhi-core HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.profiles.read\r\n\r\n",
+    )
+    .expect("capability model retrieve");
+    let body = response_body_json(&retrieve);
+    let settings = resource_data_pointer(&body, "/settings")
+        .and_then(serde_json::Value::as_array)
+        .expect("capability model settings schema");
+    assert!(!settings.is_empty());
+    assert!(settings.iter().any(|definition| {
+        definition
+            .get("settingKey")
+            .and_then(serde_json::Value::as_str)
+            == Some("assistant.wakeWord")
+            && definition
+                .get("options")
+                .and_then(serde_json::Value::as_array)
+                .map(|options| options.len() >= 2)
+                .unwrap_or(false)
+    }));
+
+    let invalid_schema = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/capability_models HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.profiles.write\r\n\r\n{\"capabilityModelId\":\"capmodel-settings-invalid\",\"displayName\":\"Invalid Settings Model\",\"version\":\"1.0.0\",\"settings\":[{\"settingKey\":\"mode\",\"displayName\":\"Mode\",\"kind\":\"enum\"}]}",
+    )
+    .expect("create capability model with invalid settings");
+    assert!(invalid_schema.starts_with("HTTP/1.1 422"));
+    assert_problem_contains_code(&invalid_schema, SdkWorkResultCode::ValidationError);
+
+    let created = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/capability_models HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.profiles.write\r\n\r\n{\"capabilityModelId\":\"capmodel-settings-valid\",\"displayName\":\"Valid Settings Model\",\"version\":\"1.0.0\",\"settings\":[{\"settingKey\":\"audio.volume\",\"displayName\":\"Volume\",\"kind\":\"integer\",\"defaultValue\":40,\"minimum\":0,\"maximum\":100}]}",
+    )
+    .expect("create capability model with settings");
+    assert!(created.starts_with("HTTP/1.1 201"));
+    let created_body = response_body_json(&created);
+    assert_eq!(
+        resource_data_pointer(&created_body, "/settings/0/settingKey")
+            .and_then(serde_json::Value::as_str),
+        Some("audio.volume")
+    );
+
+    let retrieved_created = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/capability_models/capmodel-settings-valid HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.profiles.read\r\n\r\n",
+    )
+    .expect("retrieve created capability model");
+    let retrieved_body = response_body_json(&retrieved_created);
+    assert_eq!(
+        resource_data_pointer(&retrieved_body, "/settings/0/defaultValue")
+            .and_then(serde_json::Value::as_i64),
+        Some(40)
+    );
+}
+
+#[test]
+fn device_settings_survive_admin_api_server_restart_with_entity_store() {
+    let entity_store_path = std::env::temp_dir().join(format!(
+        "sdkwork-aiot-device-settings-{}-{}.db",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or_default()
+    ));
+    let path_text = entity_store_path.to_string_lossy().to_string();
+
+    {
+        let store = Arc::new(
+            sdkwork_aiot_storage_sqlx::PersistedEntityRepository::open(&path_text)
+                .expect("open settings entity store"),
+        );
+        let device_repository =
+            Arc::new(sdkwork_aiot_storage_sqlx::InMemorySqlxDeviceRepository::new());
+        let admin = standard_admin_api_server()
+            .expect("admin api server")
+            .with_device_repository(device_repository)
+            .with_catalog_repository(Arc::new(
+                sdkwork_iot_platform_service::AiotCatalogRepositoryHandle::from_entity_store(
+                    store.clone(),
+                ),
+            ))
+            .with_device_settings_repository(
+                sdkwork_iot_platform_service::AiotDeviceSettingsRepositoryHandle::from_entity_store(
+                    store,
+                ),
+            );
+
+        let created = handle_api_request_bytes(
+            &admin,
+            b"POST /backend/v3/api/iot/devices HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.write\r\n\r\n{\"deviceId\":\"settings-device-006\",\"displayName\":\"Persisted Settings\",\"productId\":\"9001\"}",
+        )
+        .expect("create persisted settings device");
+        assert!(created.starts_with("HTTP/1.1 201"));
+
+        let updated = handle_api_request_bytes(
+            &admin,
+            b"PUT /backend/v3/api/iot/devices/settings-device-006/settings HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"overrides\":{\"audio.volume\":25}}",
+        )
+        .expect("persist settings overrides");
+        assert!(updated.starts_with("HTTP/1.1 200"));
+    }
+
+    let reopened_store = Arc::new(
+        sdkwork_aiot_storage_sqlx::PersistedEntityRepository::open(&path_text)
+            .expect("reopen settings entity store"),
+    );
+    let device_repository =
+        Arc::new(sdkwork_aiot_storage_sqlx::InMemorySqlxDeviceRepository::new());
+    let admin = standard_admin_api_server()
+        .expect("admin api server")
+        .with_device_repository(device_repository)
+        .with_catalog_repository(Arc::new(
+            sdkwork_iot_platform_service::AiotCatalogRepositoryHandle::from_entity_store(
+                reopened_store.clone(),
+            ),
+        ))
+        .with_device_settings_repository(
+            sdkwork_iot_platform_service::AiotDeviceSettingsRepositoryHandle::from_entity_store(
+                reopened_store,
+            ),
+        );
+
+    let created = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/devices HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.write\r\n\r\n{\"deviceId\":\"settings-device-006\",\"displayName\":\"Persisted Settings\",\"productId\":\"9001\"}",
+    )
+    .expect("recreate persisted settings device");
+    assert!(created.starts_with("HTTP/1.1 201"));
+
+    let reread = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/settings-device-006/settings HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.read\r\n\r\n",
+    )
+    .expect("reread persisted settings");
+    let body = response_body_json(&reread);
+    assert_eq!(
+        resource_data_pointer(&body, "/overrides/audio.volume").and_then(serde_json::Value::as_i64),
+        Some(25)
+    );
+    assert_eq!(
+        resource_data_pointer(&body, "/revision").and_then(serde_json::Value::as_str),
+        Some("1")
+    );
+
+    let _ = std::fs::remove_file(&entity_store_path);
+}
+
+#[test]
+fn backend_device_deletion_clears_settings_overrides() {
+    let admin = standard_admin_api_server().expect("admin api server");
+
+    let created = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/devices HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.write\r\n\r\n{\"deviceId\":\"settings-device-007\",\"displayName\":\"Recreated Settings\",\"productId\":\"9001\"}",
+    )
+    .expect("create settings device");
+    assert!(created.starts_with("HTTP/1.1 201"));
+
+    let updated = handle_api_request_bytes(
+        &admin,
+        b"PUT /backend/v3/api/iot/devices/settings-device-007/settings HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"overrides\":{\"audio.volume\":22}}",
+    )
+    .expect("persist settings overrides");
+    assert!(updated.starts_with("HTTP/1.1 200"));
+
+    let deleted = handle_api_request_bytes(
+        &admin,
+        b"DELETE /backend/v3/api/iot/devices/settings-device-007 HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.delete\r\n\r\n",
+    )
+    .expect("delete settings device");
+    assert!(deleted.starts_with("HTTP/1.1 204"));
+
+    let recreated = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/devices HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.write\r\n\r\n{\"deviceId\":\"settings-device-007\",\"displayName\":\"Recreated Settings\",\"productId\":\"9001\"}",
+    )
+    .expect("recreate settings device");
+    assert!(recreated.starts_with("HTTP/1.1 201"));
+
+    let reread = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/settings-device-007/settings HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.read\r\n\r\n",
+    )
+    .expect("reread recreated settings");
+    let body = response_body_json(&reread);
+    assert_eq!(
+        resource_data_pointer(&body, "/revision").and_then(serde_json::Value::as_str),
+        Some("0")
+    );
+    assert_eq!(
+        resource_data_pointer(&body, "/overrides")
+            .and_then(serde_json::Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_eq!(
+        resource_data_pointer(&body, "/effective/audio.volume").and_then(serde_json::Value::as_i64),
+        Some(60)
+    );
+}
+
+#[test]
+fn backend_device_settings_history_records_revisions_and_supports_rollback() {
+    let admin = standard_admin_api_server().expect("admin api server");
+
+    let created = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/devices HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.write\r\n\r\n{\"deviceId\":\"settings-history-001\",\"displayName\":\"History Speaker\",\"productId\":\"9001\"}",
+    )
+    .expect("create history device");
+    assert!(created.starts_with("HTTP/1.1 201"));
+
+    let first_write = handle_api_request_bytes(
+        &admin,
+        b"PUT /backend/v3/api/iot/devices/settings-history-001/settings HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"overrides\":{\"audio.volume\":35}}",
+    )
+    .expect("first settings write");
+    assert!(first_write.starts_with("HTTP/1.1 200"));
+
+    let second_write = handle_api_request_bytes(
+        &admin,
+        b"PUT /backend/v3/api/iot/devices/settings-history-001/settings HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"overrides\":{\"audio.volume\":25,\"display.brightness\":55}}",
+    )
+    .expect("second settings write");
+    assert!(second_write.starts_with("HTTP/1.1 200"));
+
+    let history = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/settings-history-001/settings/history HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.read\r\n\r\n",
+    )
+    .expect("settings history");
+    assert!(history.starts_with("HTTP/1.1 200"));
+    let history_body = response_body_json(&history);
+    let entries = list_data_items(&history_body);
+    assert_eq!(entries.len(), 2);
+    assert_eq!(
+        entries[0]
+            .get("revision")
+            .and_then(serde_json::Value::as_str),
+        Some("2")
+    );
+    assert_eq!(
+        entries[0].get("action").and_then(serde_json::Value::as_str),
+        Some("update")
+    );
+    assert!(entries[0]
+        .get("changedKeys")
+        .and_then(serde_json::Value::as_array)
+        .map(|keys| keys.len() == 2)
+        .unwrap_or(false));
+    assert_eq!(
+        entries[1]
+            .get("revision")
+            .and_then(serde_json::Value::as_str),
+        Some("1")
+    );
+
+    let rollback = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/devices/settings-history-001/settings/rollback HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"targetRevision\":\"1\"}",
+    )
+    .expect("rollback settings");
+    assert!(rollback.starts_with("HTTP/1.1 200"));
+    let rollback_body = response_body_json(&rollback);
+    assert_eq!(
+        resource_data_pointer(&rollback_body, "/revision").and_then(serde_json::Value::as_str),
+        Some("3")
+    );
+    assert_eq!(
+        resource_data_pointer(&rollback_body, "/overrides/audio.volume")
+            .and_then(serde_json::Value::as_i64),
+        Some(35)
+    );
+    assert_eq!(
+        resource_data_pointer(&rollback_body, "/overrides")
+            .and_then(serde_json::Value::as_object)
+            .map(serde_json::Map::len),
+        Some(1)
+    );
+
+    let missing_revision = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/devices/settings-history-001/settings/rollback HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"targetRevision\":\"99\"}",
+    )
+    .expect("rollback missing revision");
+    assert!(missing_revision.starts_with("HTTP/1.1 404"));
+    assert_problem_contains_code(&missing_revision, SdkWorkResultCode::NotFound);
+
+    let reset = handle_api_request_bytes(
+        &admin,
+        b"DELETE /backend/v3/api/iot/devices/settings-history-001/settings HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n",
+    )
+    .expect("reset settings");
+    assert!(reset.starts_with("HTTP/1.1 204"));
+
+    let history_after_reset = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/settings-history-001/settings/history HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.read\r\n\r\n",
+    )
+    .expect("settings history after reset");
+    let reset_body = response_body_json(&history_after_reset);
+    let reset_entries = list_data_items(&reset_body);
+    assert_eq!(reset_entries.len(), 4);
+    assert_eq!(
+        reset_entries[0]
+            .get("action")
+            .and_then(serde_json::Value::as_str),
+        Some("reset")
+    );
+    assert_eq!(
+        reset_entries[0]
+            .get("revision")
+            .and_then(serde_json::Value::as_str),
+        Some("4")
+    );
+}
+
+#[test]
+fn backend_device_settings_bulk_update_reports_item_level_results() {
+    let admin = standard_admin_api_server().expect("admin api server");
+
+    for device_id in ["bulk-settings-001", "bulk-settings-002"] {
+        let body = format!(
+            "{{\"deviceId\":\"{device_id}\",\"displayName\":\"Bulk {device_id}\",\"productId\":\"9001\"}}"
+        );
+        let request = format!(
+            "POST /backend/v3/api/iot/devices HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.write\r\n\r\n{body}"
+        );
+        let created =
+            handle_api_request_bytes(&admin, request.as_bytes()).expect("create bulk device");
+        assert!(created.starts_with("HTTP/1.1 201"));
+    }
+
+    let partial = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/device_settings/bulk_update HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"items\":[{\"deviceId\":\"bulk-settings-001\",\"overrides\":{\"audio.volume\":30}},{\"deviceId\":\"bulk-settings-002\",\"overrides\":{\"audio.volume\":999}}]}",
+    )
+    .expect("partial bulk settings update");
+    assert!(partial.starts_with("HTTP/1.1 200"));
+    let partial_body = response_body_json(&partial);
+    assert_eq!(
+        partial_body
+            .pointer("/data/allOrNothing")
+            .and_then(serde_json::Value::as_bool),
+        Some(false)
+    );
+    let partial_items = partial_body
+        .pointer("/data/items")
+        .and_then(serde_json::Value::as_array)
+        .expect("bulk items");
+    assert_eq!(partial_items.len(), 2);
+    assert_eq!(
+        partial_items[0]
+            .get("status")
+            .and_then(serde_json::Value::as_str),
+        Some("updated")
+    );
+    assert_eq!(
+        partial_items[0]
+            .get("revision")
+            .and_then(serde_json::Value::as_str),
+        Some("1")
+    );
+    assert_eq!(
+        partial_items[1]
+            .get("status")
+            .and_then(serde_json::Value::as_str),
+        Some("invalid")
+    );
+    assert!(partial_items[1]
+        .get("errors")
+        .and_then(serde_json::Value::as_array)
+        .map(|errors| !errors.is_empty())
+        .unwrap_or(false));
+
+    let all_or_nothing = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/device_settings/bulk_update HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"allOrNothing\":true,\"items\":[{\"deviceId\":\"bulk-settings-001\",\"overrides\":{\"audio.volume\":45}},{\"deviceId\":\"bulk-settings-002\",\"overrides\":{\"audio.volume\":999}}]}",
+    )
+    .expect("all-or-nothing bulk settings update");
+    assert!(all_or_nothing.starts_with("HTTP/1.1 200"));
+    let all_or_nothing_body = response_body_json(&all_or_nothing);
+    let all_or_nothing_items = all_or_nothing_body
+        .pointer("/data/items")
+        .and_then(serde_json::Value::as_array)
+        .expect("bulk items");
+    assert_eq!(
+        all_or_nothing_items[0]
+            .get("status")
+            .and_then(serde_json::Value::as_str),
+        Some("skipped")
+    );
+    assert_eq!(
+        all_or_nothing_items[1]
+            .get("status")
+            .and_then(serde_json::Value::as_str),
+        Some("invalid")
+    );
+
+    let reread = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/bulk-settings-001/settings HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.read\r\n\r\n",
+    )
+    .expect("reread bulk settings device");
+    let reread_body = response_body_json(&reread);
+    assert_eq!(
+        resource_data_pointer(&reread_body, "/revision").and_then(serde_json::Value::as_str),
+        Some("1")
+    );
+    assert_eq!(
+        resource_data_pointer(&reread_body, "/effective/audio.volume")
+            .and_then(serde_json::Value::as_i64),
+        Some(30)
+    );
+
+    let duplicate_items = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/device_settings/bulk_update HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"items\":[{\"deviceId\":\"bulk-settings-001\",\"overrides\":{}},{\"deviceId\":\"bulk-settings-001\",\"overrides\":{}}]}",
+    )
+    .expect("duplicate bulk items");
+    assert!(duplicate_items.starts_with("HTTP/1.1 422"));
+
+    let empty_items = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/device_settings/bulk_update HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.write\r\n\r\n{\"items\":[]}",
+    )
+    .expect("empty bulk items");
+    assert!(empty_items.starts_with("HTTP/1.1 422"));
+
+    let wrong_permission = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/device_settings/bulk_update HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.deviceSettings.read\r\n\r\n{\"items\":[{\"deviceId\":\"bulk-settings-001\",\"overrides\":{}}]}",
+    )
+    .expect("bulk settings with read permission");
+    assert!(wrong_permission.starts_with("HTTP/1.1 403"));
+    assert_problem_contains_code(&wrong_permission, SdkWorkResultCode::PermissionRequired);
+}
+
+struct StubHardwareToolSource {
+    catalog: sdkwork_iot_platform_service::AiotDeviceHardwareToolCatalog,
+}
+
+impl sdkwork_iot_platform_service::AiotDeviceHardwareToolSource for StubHardwareToolSource {
+    fn list_hardware_tools(
+        &self,
+        _device_id: &str,
+    ) -> Result<
+        sdkwork_iot_platform_service::AiotDeviceHardwareToolCatalog,
+        sdkwork_iot_platform_service::AiotDeviceHardwareToolError,
+    > {
+        Ok(self.catalog.clone())
+    }
+}
+
+struct UnavailableHardwareToolSource;
+
+impl sdkwork_iot_platform_service::AiotDeviceHardwareToolSource for UnavailableHardwareToolSource {
+    fn list_hardware_tools(
+        &self,
+        _device_id: &str,
+    ) -> Result<
+        sdkwork_iot_platform_service::AiotDeviceHardwareToolCatalog,
+        sdkwork_iot_platform_service::AiotDeviceHardwareToolError,
+    > {
+        Err(
+            sdkwork_iot_platform_service::AiotDeviceHardwareToolError::Unavailable(
+                "edge runtime unavailable".to_string(),
+            ),
+        )
+    }
+}
+
+#[test]
+fn backend_device_hardware_tools_route_returns_live_mcp_catalog() {
+    let catalog = sdkwork_iot_platform_service::AiotDeviceHardwareToolCatalog {
+        device_id: "hardware-tools-001".to_string(),
+        online: true,
+        discovered: true,
+        tools: vec![
+            sdkwork_iot_platform_service::AiotDeviceHardwareTool {
+                name: "self.audio_speaker.set_volume".to_string(),
+                description: "Set volume".to_string(),
+                input_schema_json:
+                    r#"{"type":"object","properties":{"volume":{"type":"integer"}}}"#.to_string(),
+            },
+            sdkwork_iot_platform_service::AiotDeviceHardwareTool {
+                name: "self.camera.take_photo".to_string(),
+                description: "Take a photo".to_string(),
+                input_schema_json: "{}".to_string(),
+            },
+        ],
+    };
+    let admin = standard_admin_api_server()
+        .expect("admin api server")
+        .with_device_hardware_tool_source(Arc::new(StubHardwareToolSource { catalog }));
+
+    let create = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/devices HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.write\r\n\r\n{\"deviceId\":\"hardware-tools-001\",\"displayName\":\"Hardware Tools Device\",\"productId\":\"9001\",\"chipFamily\":\"esp32_s3\"}",
+    )
+    .expect("create hardware tools device");
+    assert!(create.starts_with("HTTP/1.1 201"));
+
+    let response = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/hardware-tools-001/hardware_tools HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.read\r\n\r\n",
+    )
+    .expect("hardware tools list");
+    assert!(response.starts_with("HTTP/1.1 200"));
+    let body = response_body_json(&response);
+    let item = body
+        .get("data")
+        .and_then(|data| data.get("item"))
+        .expect("data.item");
+    assert_eq!(
+        item.get("deviceId").and_then(serde_json::Value::as_str),
+        Some("hardware-tools-001")
+    );
+    assert_eq!(
+        item.get("online").and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        item.get("discovered").and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    let tools = item
+        .get("tools")
+        .and_then(serde_json::Value::as_array)
+        .expect("tools");
+    assert_eq!(tools.len(), 2);
+    assert_eq!(
+        tools[0].get("name").and_then(serde_json::Value::as_str),
+        Some("self.audio_speaker.set_volume")
+    );
+    assert_eq!(
+        tools[0]
+            .get("inputSchema")
+            .and_then(|schema| schema.get("type"))
+            .and_then(serde_json::Value::as_str),
+        Some("object")
+    );
+
+    let missing = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/hardware-tools-missing/hardware_tools HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.read\r\n\r\n",
+    )
+    .expect("missing device hardware tools");
+    assert!(missing.starts_with("HTTP/1.1 404"));
+    assert_problem_contains_code(&missing, SdkWorkResultCode::NotFound);
+
+    let forbidden = handle_api_request_bytes(
+        &admin,
+        b"GET /backend/v3/api/iot/devices/hardware-tools-001/hardware_tools HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.twins.read\r\n\r\n",
+    )
+    .expect("forbidden hardware tools");
+    assert!(forbidden.starts_with("HTTP/1.1 403"));
+}
+
+#[test]
+fn backend_device_hardware_tools_route_reports_offline_and_unavailable_states() {
+    let offline = standard_admin_api_server()
+        .expect("admin api server")
+        .with_device_hardware_tool_source(Arc::new(StubHardwareToolSource {
+            catalog: sdkwork_iot_platform_service::AiotDeviceHardwareToolCatalog::offline(
+                "hardware-offline-001",
+            ),
+        }));
+    let create = handle_api_request_bytes(
+        &offline,
+        b"POST /backend/v3/api/iot/devices HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.write\r\n\r\n{\"deviceId\":\"hardware-offline-001\",\"displayName\":\"Offline Device\",\"productId\":\"9001\"}",
+    )
+    .expect("create offline device");
+    assert!(create.starts_with("HTTP/1.1 201"));
+
+    let response = handle_api_request_bytes(
+        &offline,
+        b"GET /backend/v3/api/iot/devices/hardware-offline-001/hardware_tools HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.read\r\n\r\n",
+    )
+    .expect("offline hardware tools");
+    assert!(response.starts_with("HTTP/1.1 200"));
+    let body = response_body_json(&response);
+    let item = body
+        .get("data")
+        .and_then(|data| data.get("item"))
+        .expect("data.item");
+    assert_eq!(
+        item.get("online").and_then(serde_json::Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        item.get("tools")
+            .and_then(serde_json::Value::as_array)
+            .map(Vec::len),
+        Some(0)
+    );
+
+    let unavailable = standard_admin_api_server()
+        .expect("admin api server")
+        .with_device_hardware_tool_source(Arc::new(UnavailableHardwareToolSource));
+    let create = handle_api_request_bytes(
+        &unavailable,
+        b"POST /backend/v3/api/iot/devices HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.write\r\n\r\n{\"deviceId\":\"hardware-unavailable-001\",\"displayName\":\"Unavailable Device\",\"productId\":\"9001\"}",
+    )
+    .expect("create unavailable device");
+    assert!(create.starts_with("HTTP/1.1 201"));
+
+    let response = handle_api_request_bytes(
+        &unavailable,
+        b"GET /backend/v3/api/iot/devices/hardware-unavailable-001/hardware_tools HTTP/1.1\r\nHost: local\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.read\r\n\r\n",
+    )
+    .expect("unavailable hardware tools");
+    assert!(response.starts_with("HTTP/1.1 503"));
+    assert_problem_contains_code(&response, SdkWorkResultCode::ServiceUnavailable);
 }

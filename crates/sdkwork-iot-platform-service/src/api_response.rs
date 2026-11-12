@@ -47,7 +47,9 @@ pub fn aiot_wire_code_to_result(wire_code: &str) -> SdkWorkResultCode {
         "api.intelligence.kernel_misconfigured"
         | "api.intelligence.kernel_unavailable"
         | "api.intelligence.kernel_session_failed"
-        | "api.intelligence.kernel_message_failed" => SdkWorkResultCode::ServiceUnavailable,
+        | "api.intelligence.kernel_message_failed"
+        | "api.device.hardware_tools.unavailable" => SdkWorkResultCode::ServiceUnavailable,
+        "api.device.hardware_tools.invalid_response" => SdkWorkResultCode::InternalError,
         _ => legacy_wire_result_code(wire_code),
     }
 }
@@ -59,10 +61,34 @@ fn http_status_from_result_code(result_code: SdkWorkResultCode) -> HttpStatus {
         403 => HttpStatus::Forbidden,
         404 => HttpStatus::NotFound,
         409 => HttpStatus::Conflict,
+        422 => HttpStatus::UnprocessableEntity,
         429 => HttpStatus::TooManyRequests,
         503 => HttpStatus::ServiceUnavailable,
         _ => HttpStatus::InternalServerError,
     }
+}
+
+/// Builds an `application/problem+json` response that carries field-level
+/// `errors[]` entries for client-side form rendering (`API_SPEC.md` 搂15.3.3).
+pub fn problem_detail_with_errors(
+    request: &HttpRequest,
+    status: HttpStatus,
+    result_code: SdkWorkResultCode,
+    detail: impl Into<String>,
+    errors: &serde_json::Value,
+) -> HttpResponse {
+    let trace_id = resolve_trace_id(request);
+    let problem = SdkWorkProblemDetail::platform(result_code, detail, &trace_id);
+    let mut body = serde_json::to_value(&problem).unwrap_or(serde_json::Value::Null);
+    if let Some(object) = body.as_object_mut() {
+        object.insert("errors".to_string(), errors.clone());
+    }
+    apply_security_headers(
+        HttpResponse::new(status)
+            .with_header("content-type", "application/problem+json")
+            .with_header(SDKWORK_TRACE_ID_HEADER, &trace_id)
+            .with_body(body.to_string()),
+    )
 }
 
 pub fn problem_detail_response(

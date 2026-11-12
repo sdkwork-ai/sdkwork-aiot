@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Bot, Cpu, Mic, RadioTower } from 'lucide-react';
+import { Bot, Cpu, Mic, RadioTower, ShieldCheck } from 'lucide-react';
+import { SdkworkAdminPage } from '@sdkwork/aiot-pc-console-admin';
 import { SdkworkAgentPage } from '@sdkwork/aiot-pc-console-agent';
 import { SdkworkDevicePage } from '@sdkwork/aiot-pc-console-device';
 import { SdkworkIotPage } from '@sdkwork/aiot-pc-console-iot';
 import { SdkworkVoicePage } from '@sdkwork/aiot-pc-console-voice';
 import { initAiotAppSdkClient, initAiotBackendSdkClient, initAgentsAppSdkClient, initDriveAppSdkClient, initVoiceAppSdkClient } from '@sdkwork/aiot-pc-core';
 
-type AiotRoute = '/devices' | '/iot' | '/voice' | '/agent';
+type AiotRoute = '/devices' | '/iot' | '/admin' | '/voice' | '/agent';
 
 const NAV_ITEMS: Array<{ icon: typeof Cpu; id: AiotRoute; label: string }> = [
   { icon: Cpu, id: '/devices', label: '设备' },
   { icon: RadioTower, id: '/iot', label: 'IoT 舰队' },
+  { icon: ShieldCheck, id: '/admin', label: '设备管理' },
   { icon: Mic, id: '/voice', label: '语音对话' },
   { icon: Bot, id: '/agent', label: '智能体' },
 ];
@@ -18,6 +20,9 @@ const NAV_ITEMS: Array<{ icon: typeof Cpu; id: AiotRoute; label: string }> = [
 function resolveRouteIntent(route: string): AiotRoute {
   if (route.startsWith('/iot')) {
     return '/iot';
+  }
+  if (route.startsWith('/admin')) {
+    return '/admin';
   }
   if (route.startsWith('/voice')) {
     return '/voice';
@@ -91,6 +96,7 @@ export function App() {
 
         {route === '/devices' ? <SdkworkDevicePage onNavigate={handleNavigate} /> : null}
         {route === '/iot' ? <SdkworkIotPage onNavigate={handleNavigate} /> : null}
+        {route === '/admin' ? <SdkworkAdminPage onNavigate={handleNavigate} /> : null}
         {route === '/voice' ? <SdkworkVoicePage /> : null}
         {route === '/agent' ? <SdkworkAgentPage /> : null}
       </main>

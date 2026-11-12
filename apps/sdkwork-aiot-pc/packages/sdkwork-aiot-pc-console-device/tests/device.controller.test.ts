@@ -56,6 +56,7 @@ describe("sdkwork-aiot-pc-console-device controller", () => {
 
     expect(service.getCatalog).toHaveBeenLastCalledWith({
       deviceId: "device-field-laptop",
+      page: 1,
     });
     expect(controller.getState().selectedDeviceId).toBe("device-field-laptop");
   });

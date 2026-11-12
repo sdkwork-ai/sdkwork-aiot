@@ -1238,6 +1238,237 @@
       "auth": {
         "dataScope": "organization",
         "mode": "dual-token",
+        "permission": "iot.deviceSettings.read",
+        "required": true,
+        "tenantScope": "tenant"
+      },
+      "handler": {
+        "module": "sdkwork_iot_platform_service",
+        "name": "devices.settings.retrieve"
+      },
+      "method": "GET",
+      "operationId": "devices.settings.retrieve",
+      "ownership": {
+        "apiAuthority": "sdkwork-aiot-backend-api",
+        "owner": "sdkwork-aiot"
+      },
+      "path": "/backend/v3/api/iot/devices/{deviceId}/settings",
+      "requestContext": "WebRequestContext",
+      "schemas": {
+        "problem": "ProblemDetail",
+        "request": null,
+        "response": null
+      },
+      "source": {
+        "file": "crates/sdkwork-iot-platform-service/src/lib.rs"
+      },
+      "tags": [
+        "iot.devices"
+      ]
+    },
+    {
+      "apiSurface": "backend-api",
+      "auth": {
+        "dataScope": "organization",
+        "mode": "dual-token",
+        "permission": "iot.devices.read",
+        "required": true,
+        "tenantScope": "tenant"
+      },
+      "handler": {
+        "module": "sdkwork_iot_platform_service",
+        "name": "devices.hardwareTools.list"
+      },
+      "method": "GET",
+      "operationId": "devices.hardwareTools.list",
+      "ownership": {
+        "apiAuthority": "sdkwork-aiot-backend-api",
+        "owner": "sdkwork-aiot"
+      },
+      "path": "/backend/v3/api/iot/devices/{deviceId}/hardware_tools",
+      "requestContext": "WebRequestContext",
+      "schemas": {
+        "problem": "ProblemDetail",
+        "request": null,
+        "response": null
+      },
+      "source": {
+        "file": "crates/sdkwork-iot-platform-service/src/lib.rs"
+      },
+      "tags": [
+        "iot.devices"
+      ]
+    },
+    {
+      "apiSurface": "backend-api",
+      "auth": {
+        "dataScope": "organization",
+        "mode": "dual-token",
+        "permission": "iot.deviceSettings.write",
+        "required": true,
+        "tenantScope": "tenant"
+      },
+      "handler": {
+        "module": "sdkwork_iot_platform_service",
+        "name": "devices.settings.update"
+      },
+      "method": "PUT",
+      "operationId": "devices.settings.update",
+      "ownership": {
+        "apiAuthority": "sdkwork-aiot-backend-api",
+        "owner": "sdkwork-aiot"
+      },
+      "path": "/backend/v3/api/iot/devices/{deviceId}/settings",
+      "requestContext": "WebRequestContext",
+      "schemas": {
+        "problem": "ProblemDetail",
+        "request": null,
+        "response": null
+      },
+      "source": {
+        "file": "crates/sdkwork-iot-platform-service/src/lib.rs"
+      },
+      "tags": [
+        "iot.devices"
+      ]
+    },
+    {
+      "apiSurface": "backend-api",
+      "auth": {
+        "dataScope": "organization",
+        "mode": "dual-token",
+        "permission": "iot.deviceSettings.write",
+        "required": true,
+        "tenantScope": "tenant"
+      },
+      "handler": {
+        "module": "sdkwork_iot_platform_service",
+        "name": "devices.settings.delete"
+      },
+      "method": "DELETE",
+      "operationId": "devices.settings.delete",
+      "ownership": {
+        "apiAuthority": "sdkwork-aiot-backend-api",
+        "owner": "sdkwork-aiot"
+      },
+      "path": "/backend/v3/api/iot/devices/{deviceId}/settings",
+      "requestContext": "WebRequestContext",
+      "schemas": {
+        "problem": "ProblemDetail",
+        "request": null,
+        "response": null
+      },
+      "source": {
+        "file": "crates/sdkwork-iot-platform-service/src/lib.rs"
+      },
+      "tags": [
+        "iot.devices"
+      ]
+    },
+    {
+      "apiSurface": "backend-api",
+      "auth": {
+        "dataScope": "organization",
+        "mode": "dual-token",
+        "permission": "iot.deviceSettings.read",
+        "required": true,
+        "tenantScope": "tenant"
+      },
+      "handler": {
+        "module": "sdkwork_iot_platform_service",
+        "name": "devices.settings.history.list"
+      },
+      "method": "GET",
+      "operationId": "devices.settings.history.list",
+      "ownership": {
+        "apiAuthority": "sdkwork-aiot-backend-api",
+        "owner": "sdkwork-aiot"
+      },
+      "path": "/backend/v3/api/iot/devices/{deviceId}/settings/history",
+      "requestContext": "WebRequestContext",
+      "schemas": {
+        "problem": "ProblemDetail",
+        "request": null,
+        "response": null
+      },
+      "source": {
+        "file": "crates/sdkwork-iot-platform-service/src/lib.rs"
+      },
+      "tags": [
+        "iot.devices"
+      ]
+    },
+    {
+      "apiSurface": "backend-api",
+      "auth": {
+        "dataScope": "organization",
+        "mode": "dual-token",
+        "permission": "iot.deviceSettings.write",
+        "required": true,
+        "tenantScope": "tenant"
+      },
+      "handler": {
+        "module": "sdkwork_iot_platform_service",
+        "name": "devices.settings.rollback"
+      },
+      "method": "POST",
+      "operationId": "devices.settings.rollback",
+      "ownership": {
+        "apiAuthority": "sdkwork-aiot-backend-api",
+        "owner": "sdkwork-aiot"
+      },
+      "path": "/backend/v3/api/iot/devices/{deviceId}/settings/rollback",
+      "requestContext": "WebRequestContext",
+      "schemas": {
+        "problem": "ProblemDetail",
+        "request": null,
+        "response": null
+      },
+      "source": {
+        "file": "crates/sdkwork-iot-platform-service/src/lib.rs"
+      },
+      "tags": [
+        "iot.devices"
+      ]
+    },
+    {
+      "apiSurface": "backend-api",
+      "auth": {
+        "dataScope": "organization",
+        "mode": "dual-token",
+        "permission": "iot.deviceSettings.write",
+        "required": true,
+        "tenantScope": "tenant"
+      },
+      "handler": {
+        "module": "sdkwork_iot_platform_service",
+        "name": "deviceSettings.bulkUpdate"
+      },
+      "method": "POST",
+      "operationId": "deviceSettings.bulkUpdate",
+      "ownership": {
+        "apiAuthority": "sdkwork-aiot-backend-api",
+        "owner": "sdkwork-aiot"
+      },
+      "path": "/backend/v3/api/iot/device_settings/bulk_update",
+      "requestContext": "WebRequestContext",
+      "schemas": {
+        "problem": "ProblemDetail",
+        "request": null,
+        "response": null
+      },
+      "source": {
+        "file": "crates/sdkwork-iot-platform-service/src/lib.rs"
+      },
+      "tags": [
+        "iot.deviceSettings"
+      ]
+    },
+    {
+      "apiSurface": "backend-api",
+      "auth": {
+        "dataScope": "organization",
+        "mode": "dual-token",
         "permission": "iot.firmware.read",
         "required": true,
         "tenantScope": "tenant"

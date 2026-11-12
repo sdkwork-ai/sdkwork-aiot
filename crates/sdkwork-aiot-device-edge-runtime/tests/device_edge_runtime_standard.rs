@@ -1021,9 +1021,9 @@ fn xiaozhi_websocket_session_acknowledges_listen_mcp_and_audio_frames() {
     )
     .expect("mcp reply");
     let mcp_reply_text = reply_texts(&mcp_replies);
-    assert!(mcp_reply_text
-        .iter()
-        .any(|reply| reply.contains(r#""method":"tools/list""#)));
+    // A response belongs to a server request and must never be answered with
+    // another request (that would loop on a real device).
+    assert!(mcp_reply_text.is_empty());
 
     let mcp_notification_replies = xiaozhi_websocket_session_reply(
         &server,
@@ -3056,4 +3056,159 @@ fn xiaozhi_device_token_rejects_missing_credential_in_non_dev_mode() {
     )
     .expect("ws request");
     assert!(!xiaozhi_device_token_valid(&request, &options));
+}
+
+#[test]
+fn xiaozhi_listen_stop_action_decides_between_speech_and_playback_stop() {
+    use sdkwork_aiot_device_edge_runtime::{xiaozhi_listen_stop_action, XiaozhiListenStopAction};
+
+    assert_eq!(
+        xiaozhi_listen_stop_action(true, true, true),
+        XiaozhiListenStopAction::RunSpeech
+    );
+    assert_eq!(
+        xiaozhi_listen_stop_action(true, true, false),
+        XiaozhiListenStopAction::StopPlayback
+    );
+    assert_eq!(
+        xiaozhi_listen_stop_action(false, true, true),
+        XiaozhiListenStopAction::KernelMisconfigured
+    );
+    assert_eq!(
+        xiaozhi_listen_stop_action(false, false, true),
+        XiaozhiListenStopAction::StopPlayback
+    );
+}
+
+#[test]
+fn xiaozhi_websocket_session_listen_stop_without_audio_stops_playback() {
+    let server = standard_device_edge_server().expect("device edge server");
+    let request = sdkwork_aiot_transport::parse_http_request_bytes(
+        b"GET /iot/xiaozhi/ws?protocol_version=3&device_id=dev-stop-001&client_id=browser-stop-001 HTTP/1.1\r\nHost: domain\r\n\r\n",
+    )
+    .expect("request");
+    let hello = xiaozhi_websocket_session_reply(
+        &server,
+        &request,
+        sdkwork_aiot_transport::WebSocketFrame::text(
+            r#"{"type":"hello","version":1,"transport":"websocket","audio_params":{"format":"opus","sample_rate":16000,"channels":1,"frame_duration":60}}"#,
+        ),
+    )
+    .expect("hello replies");
+    assert!(reply_texts(&hello)
+        .iter()
+        .any(|text| text.contains(r#""type":"hello""#)));
+
+    let listen_start = xiaozhi_websocket_session_reply(
+        &server,
+        &request,
+        sdkwork_aiot_transport::WebSocketFrame::text(
+            r#"{"session_id":"dev-stop-001-browser-stop-001","type":"listen","state":"start","mode":"manual"}"#,
+        ),
+    )
+    .expect("listen start");
+    assert!(!listen_start.is_empty());
+
+    let stop = xiaozhi_websocket_session_reply(
+        &server,
+        &request,
+        sdkwork_aiot_transport::WebSocketFrame::text(
+            r#"{"session_id":"dev-stop-001-browser-stop-001","type":"listen","state":"stop"}"#,
+        ),
+    )
+    .expect("listen stop");
+    assert!(reply_texts(&stop)
+        .iter()
+        .any(|text| text.contains(r#""type":"tts","state":"stop""#)));
+}
+
+#[test]
+fn xiaozhi_websocket_session_abort_stops_playback() {
+    let server = standard_device_edge_server().expect("device edge server");
+    let request = sdkwork_aiot_transport::parse_http_request_bytes(
+        b"GET /iot/xiaozhi/ws?protocol_version=3&device_id=dev-abort-001&client_id=browser-abort-001 HTTP/1.1\r\nHost: domain\r\n\r\n",
+    )
+    .expect("request");
+    let abort = xiaozhi_websocket_session_reply(
+        &server,
+        &request,
+        sdkwork_aiot_transport::WebSocketFrame::text(
+            r#"{"session_id":"dev-abort-001-browser-abort-001","type":"abort","reason":"wake_word_detected"}"#,
+        ),
+    )
+    .expect("abort reply");
+    assert!(reply_texts(&abort)
+        .iter()
+        .any(|text| text.contains(r#""type":"tts","state":"stop""#)));
+}
+
+#[test]
+fn xiaozhi_websocket_mcp_discovery_pages_device_tools() {
+    let server = standard_device_edge_server().expect("device edge server");
+    let request = sdkwork_aiot_transport::parse_http_request_bytes(
+        b"GET /iot/xiaozhi/ws?protocol_version=3&device_id=dev-mcp-disc-001&client_id=browser-mcp-disc-001 HTTP/1.1\r\nHost: domain\r\n\r\n",
+    )
+    .expect("request");
+    let session_id = "mcp-disc-session-001";
+
+    let hello = xiaozhi_websocket_session_reply(
+        &server,
+        &request,
+        sdkwork_aiot_transport::WebSocketFrame::text(format!(
+            r#"{{"type":"hello","version":3,"transport":"websocket","session_id":"{session_id}","features":{{"mcp":true}},"audio_params":{{"format":"opus","sample_rate":16000,"channels":1,"frame_duration":60}}}}"#
+        )),
+    )
+    .expect("hello replies");
+    let initialize = reply_texts(&hello)
+        .into_iter()
+        .find(|text| text.contains(r#""method":"initialize""#))
+        .expect("initialize request");
+    let initialize_id = extract_json_numeric_id(initialize);
+
+    let initialize_response = xiaozhi_websocket_session_reply(
+        &server,
+        &request,
+        sdkwork_aiot_transport::WebSocketFrame::text(format!(
+            r#"{{"session_id":"{session_id}","type":"mcp","payload":{{"jsonrpc":"2.0","id":{initialize_id},"result":{{"protocolVersion":"2024-11-05","capabilities":{{"tools":{{}}}}}}}}}}"#
+        )),
+    )
+    .expect("initialize response");
+    let tools_request = reply_texts(&initialize_response)
+        .into_iter()
+        .find(|text| text.contains(r#""method":"tools/list""#))
+        .expect("tools/list request");
+    let tools_request_id = extract_json_numeric_id(tools_request);
+
+    let tools_response = xiaozhi_websocket_session_reply(
+        &server,
+        &request,
+        sdkwork_aiot_transport::WebSocketFrame::text(format!(
+            r#"{{"session_id":"{session_id}","type":"mcp","payload":{{"jsonrpc":"2.0","id":{tools_request_id},"result":{{"tools":[{{"name":"self.audio_speaker.set_volume","description":"Set volume","inputSchema":{{"type":"object"}}}},{{"name":"self.camera.take_photo","description":"Take photo"}}]}}}}}}"#
+        )),
+    )
+    .expect("tools response");
+    assert!(reply_texts(&tools_response).is_empty());
+
+    let tools = sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_session_tools(session_id);
+    assert_eq!(tools.len(), 2);
+    assert!(tools
+        .iter()
+        .any(|tool| tool.name == "self.audio_speaker.set_volume"));
+    assert!(tools
+        .iter()
+        .any(|tool| tool.name == "self.camera.take_photo"));
+    assert!(sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_discovery_complete(session_id));
+
+    let catalog_json = sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_session_tools_json(session_id);
+    assert!(catalog_json.contains(r#""discovered":true"#));
+    assert!(catalog_json.contains(r#""name":"self.camera.take_photo""#));
+    sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_clear_session(session_id);
+}
+
+fn extract_json_numeric_id(text: &str) -> u64 {
+    text.split(r#""id":"#)
+        .nth(1)
+        .and_then(|tail| tail.split([',', '}']).next())
+        .and_then(|value| value.parse::<u64>().ok())
+        .expect("numeric json id")
 }

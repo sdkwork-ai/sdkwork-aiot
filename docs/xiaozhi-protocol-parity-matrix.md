@@ -112,6 +112,20 @@ git submodule update --init external/xiaozhi-esp32
 | OpenAPI Problem response declaration vs runtime error status behavior | Implemented | Contract tests validate each surface defines `components.responses.Problem` as `application/problem+json`, and that observed runtime 4xx/409 error statuses are covered by explicit response codes or `default: #/components/responses/Problem` on corresponding operations. |
 | TypeScript SDK ProblemDetails parity (app/backend) | Implemented | Both TS SDKs export `ProblemDetails`, `isProblemDetails`, and `normalizeProblemDetails` aligned with OpenAPI `components.schemas.ProblemDetails` required fields (`type`, `title`, `status`) and optional extension fields (`detail`, `traceId`, `code`) while preserving additional properties; both also export stable problem-code catalogs and guards (`SDKWORK_AIOT_*_PROBLEM_CODES`, `isSdkworkAiot*ProblemCode`) covering core runtime API error codes. |
 
+## Server-Side Discovery And Session Fixes (2026-11-12)
+
+- After `hello` with `features.mcp`, the backend sends `initialize`, then pages
+  device `tools/list` (cursor aware) and caches every tool the device exposes
+  (`self.audio_speaker.*`, `self.camera.*`, board actuators) per session.
+  `GET /internal/xiaozhi/mcp_tools?device_id=...` exposes the catalog of the
+  active WebSocket session.
+- Responses and errors are never answered with another request; the previous
+  simulator behaviour (replying to any MCP response with `tools/list`) could
+  loop forever against real hardware and was removed.
+- Kernel-mode `listen: stop` now runs the buffered utterance through
+  ASR/LLM/TTS instead of discarding it. `detect` (wake word) no longer becomes a
+  user prompt in production, and `abort` clears buffered uplink audio.
+
 ## Open Gaps (Next Iteration)
 
 1. Distributed bridge rate limits and richer trace hooks (control plane exists; advanced backpressure optional).

@@ -135,6 +135,7 @@ fn bootstrap_aiot_servers() -> Result<
             .with_twin_repository(admin_stores.device_repository)
             .with_credential_repository(admin_stores.credential_repository)
             .with_catalog_repository(admin_stores.catalog_repository)
+            .with_device_settings_repository(admin_stores.device_settings_repository)
             .with_firmware_repository(admin_stores.firmware_repository),
     );
     Ok((app_server, admin_server))

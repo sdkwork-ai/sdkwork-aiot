@@ -90,14 +90,21 @@ export async function uploadAiotFirmwareArtifactToDrive(
   );
 
   const backendClient = getAiotBackendSdkClient();
-  const created = await backendClient.iot.firmwareArtifacts.create({
-    artifactKey,
-    version,
-    resource: mediaResource,
-    sha256,
-    targetChipFamily: input.targetChipFamily,
-    targetRuntimeProfile: input.targetRuntimeProfile,
-  });
+  const created = await backendClient.iot.firmwareArtifacts.create(
+    {
+      artifactKey,
+      version,
+      resource: mediaResource,
+      sha256,
+      targetChipFamily: input.targetChipFamily,
+      targetRuntimeProfile: input.targetRuntimeProfile,
+    },
+    {
+      // Deterministic per content + version so a retried upload cannot create a
+      // duplicate artifact for the same flashable image.
+      idempotencyKey: `fw-${sha256.slice(0, 24)}-${version}`.slice(0, 120),
+    },
+  );
   const artifact = (
     created && typeof created === 'object' && 'data' in created && created.data
       ? created.data

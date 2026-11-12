@@ -4,6 +4,9 @@
   "sdkName": "sdkwork-aiot-backend-sdk",
   "packageName": "@sdkwork/aiot-backend-sdk",
   "transportPackageName": "sdkwork-aiot-backend-sdk-generated-typescript",
+  "sdkOwner": "sdkwork-aiot",
+  "apiAuthority": "sdkwork-aiot-backend-api",
+  "sdkDependencies": [],
   "typescript": {
     "composedRoot": "sdkwork-aiot-backend-sdk-typescript",
     "composedEntry": "sdkwork-aiot-backend-sdk-typescript/src/index.ts",
@@ -38,8 +41,5 @@
       "consumerPackageName": "@sdkwork/aiot-backend-sdk",
       "transportPackageName": "sdkwork-aiot-backend-sdk-generated-typescript"
     }
-  ],
-  "sdkOwner": "sdkwork-aiot",
-  "apiAuthority": "sdkwork-aiot-backend-api",
-  "sdkDependencies": []
+  ]
 }

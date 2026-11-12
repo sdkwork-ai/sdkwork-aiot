@@ -3,7 +3,7 @@
   "generator": "@sdkwork/sdk-generator",
   "sdk": {
     "name": "sdkwork-aiot-app-sdk",
-    "version": "0.1.15",
+    "version": "0.1.16",
     "language": "typescript",
     "sdkType": "app",
     "protocol": "http",
@@ -32,7 +32,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "3b93e7609a860f670b536ae5989d5b00a097fc0e778f7d5dc7f51a217ec962ac"
+      "sha256": "15d73c120c9b2bac226c2bb1bb219f1808f3cc5750ea21d1df583254d46de42e"
     },
     {
       "path": "LICENSE",
@@ -40,15 +40,15 @@
     },
     {
       "path": "package.json",
-      "sha256": "7b189534009e3ac11f8afe9636606420e79d7b8d2ec1ff9a360fe8e3768a0375"
+      "sha256": "ec4a27efefb2d4edec7f3d64d10cf407ff2ea003b907a02ac3130f3b3d4ec000"
     },
     {
       "path": "README.md",
-      "sha256": "7e831dc80971b156a1c1339e7b02541d275b98c9299964539ff022761c7d2999"
+      "sha256": "4167e60dd2a302a4030e37c9adf751e6d39660ff5a5dc56382ec6caee71f0865"
     },
     {
       "path": "sdkwork-sdk.json",
-      "sha256": "8d8ea68b0d26acb462e8253a3f815ebef277880db8ecdacc6152a441c058ad88"
+      "sha256": "98e4f3e6dd00c5afbdf7893f55e3f4adcf1f4604b0f4a468c8dc711d4a9f1c4e"
     },
     {
       "path": "src/api/base.ts",
@@ -60,7 +60,7 @@
     },
     {
       "path": "src/api/iot.ts",
-      "sha256": "9368395089f5e5f0d82c4725c42765543788e86088a509d4418b2d7bee1e331d"
+      "sha256": "36520f88c1be24d34bbbb884ae8bc830e82167789d9cd7d22dc67949a19c0e4b"
     },
     {
       "path": "src/api/paths.ts",
@@ -72,7 +72,7 @@
     },
     {
       "path": "src/http/client.ts",
-      "sha256": "868b7785497a93658b628de2d9b520d9d2456406bcf2ef717319beaa6913146d"
+      "sha256": "f0e93f51af678aadaf96d3e4b26e2224cb5f551b3f4651980630bbe1c7f1ceac"
     },
     {
       "path": "src/http/index.ts",
@@ -216,7 +216,7 @@
     },
     {
       "path": "tsconfig.json",
-      "sha256": "7c8a6c2b00fb208ec28e1e6045194487d1b3e563d6c44cef4783fd4fe0e8ffad"
+      "sha256": "35f6f0baf03ca4245339f0a532b02c6b0c8e64d66852a2f77d38ae063b2024b8"
     }
   ],
   "scaffoldFiles": [

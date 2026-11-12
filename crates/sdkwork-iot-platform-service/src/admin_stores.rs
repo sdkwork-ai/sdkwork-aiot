@@ -540,6 +540,7 @@ impl AiotCatalogRepositoryHandle {
                 display_name: payload.display_name,
                 version: payload.version,
                 capabilities: payload.capabilities,
+                settings: payload.settings,
                 status: "active".to_string(),
             };
             store
@@ -626,6 +627,9 @@ impl AiotCatalogRepositoryHandle {
             }
             if let Some(capabilities) = payload.capabilities {
                 record.capabilities = capabilities;
+            }
+            if let Some(settings) = payload.settings {
+                record.settings = settings;
             }
             if let Some(status) = payload.status {
                 record.status = status;
@@ -1215,11 +1219,13 @@ fn capability_model_record_json(record: &AiotCapabilityModelRecord) -> String {
         .iter()
         .map(capability_definition_json)
         .collect::<Vec<_>>();
+    let settings = crate::device_settings::settings_definitions_json(&record.settings);
     serde_json::json!({
         "capabilityModelId": record.capability_model_id,
         "displayName": record.display_name,
         "version": record.version,
         "capabilities": capabilities,
+        "settings": settings,
         "status": record.status,
     })
     .to_string()
@@ -1233,11 +1239,14 @@ fn parse_capability_model_record(payload_json: &str) -> Option<AiotCapabilityMod
         .iter()
         .filter_map(parse_capability_definition)
         .collect();
+    let settings =
+        crate::device_settings::settings_definitions_from_json(value.get("settings")).ok()?;
     Some(AiotCapabilityModelRecord {
         capability_model_id: value.get("capabilityModelId")?.as_str()?.to_string(),
         display_name: value.get("displayName")?.as_str()?.to_string(),
         version: value.get("version")?.as_str()?.to_string(),
         capabilities,
+        settings,
         status: value
             .get("status")
             .and_then(serde_json::Value::as_str)

@@ -2721,6 +2721,7 @@ name = "sdkwork-iot-device-service"
 version = "0.1.0"
 dependencies = [
  "sdkwork-aiot-contract",
+ "serde_json",
 ]
 
 [[package]]
@@ -2743,6 +2744,7 @@ dependencies = [
  "sdkwork-web-bootstrap",
  "sdkwork-web-core",
  "serde_json",
+ "ureq",
 ]
 
 [[package]]

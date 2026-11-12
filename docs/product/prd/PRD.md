@@ -41,7 +41,7 @@ Enterprises need a protocol-neutral IoT control plane that connects edge devices
 | Surface | In scope |
 | --- | --- |
 | `sdkwork-api-aiot-assembly` app-api surface | Tenant-scoped device/command/event/twin APIs |
-| `sdkwork-api-aiot-assembly` backend-api surface | Catalog, credentials, firmware, rollouts |
+| `sdkwork-api-aiot-assembly` backend-api surface | Catalog, credentials, firmware, rollouts, per-device settings administration |
 | `sdkwork-aiot-device-edge-runtime` | Xiaozhi ingress, OTA, protocol ingest, outbox worker |
 | PC/H5 consoles | IoT fleet, device ops, agents, voice (via sibling SDKs) |
 
@@ -51,6 +51,7 @@ Enterprises need a protocol-neutral IoT control plane that connects edge devices
 2. Tenant user lists devices with server pagination, sends a command, and polls command status via `devices.commands.retrieve`.
 3. Xiaozhi device connects with per-device credential; the device edge runtime persists telemetry through protocol ingest.
 4. Console user runs an agent session (Agents SDK) with device command fallback when cloud agents are unavailable.
+5. Operator selects one terminal device in the device administration console, overrides the settings inherited from its capability model (for example volume or wake word), saves with an expected revision, and the effective configuration is published to the device twin. The same console shows the revision history, rolls a device back to a recorded revision, and bulk-applies one override set across selected devices with per-device results.
 
 ## 6. Success Metrics
 
@@ -61,6 +62,7 @@ Enterprises need a protocol-neutral IoT control plane that connects edge devices
 | Security | No `DEV_MODE` in production; internal routes require token; device auth uses credential store; proxy context requires `x-sdkwork-proxy-auth` in production |
 | Intelligence | Production requires `SDKWORK_AIOT_INTELLIGENCE_MODE=kernel` with cloud-router/kernel URLs; speak commands use kernel TTS |
 | Pagination | List APIs reject `page_size > 200` with HTTP 400 / code `40003` |
+| Device settings | Schema-driven per-device overrides validate against the capability model, revision conflicts return 409, and resets restore inherited defaults |
 | Release | `pnpm release:preflight` green with SBOM and checksum evidence |
 
 ## 7. Phases
