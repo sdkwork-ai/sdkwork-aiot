@@ -1,8 +1,54 @@
 import { appApiPath } from './paths';
 import type { ApiRequestOptions, HttpClient } from '../http/client';
 
-import type { AiotCommandCreateRequest, AiotDevice, JsonValue, SdkWorkCommandData, SdkWorkPageData } from '../types';
+import type { AiotCommandCreateRequest, AiotDevice, AiotDeviceCreateRequest, AiotDeviceUpdateRequest, JsonValue, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
+
+export interface IotFirmwareArtifactsListParams {
+  page?: number;
+  pageSize?: number;
+}
+
+export class IotFirmwareArtifactsApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** List published firmware artifacts */
+  async list(params?: IotFirmwareArtifactsListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
+    const query = buildQueryString([
+      { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
+      { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
+    ]);
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/iot/firmware_artifacts`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+  }
+}
+
+export interface IotProductsListParams {
+  page?: number;
+  pageSize?: number;
+}
+
+export class IotProductsApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** List products available for user device registration */
+  async list(params?: IotProductsListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
+    const query = buildQueryString([
+      { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
+      { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
+    ]);
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/iot/products`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+  }
+}
 
 export interface IotDevicesEventsListParams {
   page?: number;
@@ -75,6 +121,14 @@ export interface IotDevicesListParams {
   pageSize?: number;
 }
 
+export interface IotDevicesCreateParams {
+  idempotencyKey: string;
+}
+
+export interface IotDevicesUpdateParams {
+  idempotencyKey: string;
+}
+
 export class IotDevicesApi {
   private client: HttpClient;
   public readonly commands: IotDevicesCommandsApi;
@@ -98,17 +152,43 @@ export class IotDevicesApi {
     return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/iot/devices`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
+/** Register a device owned by the signed-in user */
+  async create(body: AiotDeviceCreateRequest, params: IotDevicesCreateParams, requestOptions?: ApiRequestOptions): Promise<AiotDevice> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.request<AiotDevice>(appApiPath(`/iot/devices`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
+  }
+
 /** Retrieve one AIoT device */
   async retrieve(deviceId: string, requestOptions?: ApiRequestOptions): Promise<AiotDevice> {
     return this.client.request<AiotDevice>(appApiPath(`/iot/devices/${serializePathParameter(deviceId, { name: 'deviceId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+  }
+
+/** Update metadata of a device owned by the signed-in user */
+  async update(deviceId: string, body: AiotDeviceUpdateRequest, params: IotDevicesUpdateParams, requestOptions?: ApiRequestOptions): Promise<AiotDevice> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.request<AiotDevice>(appApiPath(`/iot/devices/${serializePathParameter(deviceId, { name: 'deviceId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'PUT' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 }
 
 export class IotApi {
   public readonly devices: IotDevicesApi;
+  public readonly products: IotProductsApi;
+  public readonly firmwareArtifacts: IotFirmwareArtifactsApi;
 
   constructor(client: HttpClient) {
     this.devices = new IotDevicesApi(client);
+    this.products = new IotProductsApi(client);
+    this.firmwareArtifacts = new IotFirmwareArtifactsApi(client);
   }
 
 }

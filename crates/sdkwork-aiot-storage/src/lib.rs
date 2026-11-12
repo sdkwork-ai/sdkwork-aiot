@@ -157,6 +157,8 @@ pub struct AiotDeviceRecord {
     pub id: String,
     pub tenant_id: i64,
     pub organization_id: i64,
+    pub owner_type: String,
+    pub owner_id: String,
     pub device_id: String,
     pub display_name: String,
     pub product_id: String,
@@ -167,6 +169,45 @@ pub struct AiotDeviceRecord {
     pub last_seen_at: String,
 }
 
+/// Ownership relation of a device row.
+///
+/// The AIoT device table carries `owner_type`/`owner_id`; historically every row
+/// pointed at itself (`device`). The user console introduces `user` ownership so
+/// a signed-in user can list exactly the terminal devices they registered, which
+/// is what the `idx_iot_device_tenant_owner` index serves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiotDeviceOwnerScope {
+    pub owner_type: String,
+    pub owner_id: String,
+}
+
+impl AiotDeviceOwnerScope {
+    pub fn new(owner_type: impl Into<String>, owner_id: impl Into<String>) -> Self {
+        Self {
+            owner_type: owner_type.into(),
+            owner_id: owner_id.into(),
+        }
+    }
+
+    /// Owner of a device registered by an IAM user from the user console.
+    pub fn user(user_id: impl Into<String>) -> Self {
+        Self::new("user", user_id)
+    }
+
+    /// Owner of a device provisioned by a tenant/organization administrator.
+    pub fn self_owned(
+        tenant_id: i64,
+        organization_id: i64,
+        device_id: impl Into<String>,
+    ) -> Self {
+        let device_id = device_id.into();
+        Self::new(
+            "device",
+            format!("{tenant_id}:{organization_id}:{device_id}"),
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AiotDeviceCreateCommand {
     pub association: AiotStorageAssociation,
@@ -175,6 +216,7 @@ pub struct AiotDeviceCreateCommand {
     pub product_id: String,
     pub client_id: Option<String>,
     pub chip_family: Option<String>,
+    pub owner: Option<AiotDeviceOwnerScope>,
 }
 
 impl AiotDeviceCreateCommand {
@@ -191,6 +233,7 @@ impl AiotDeviceCreateCommand {
             product_id: product_id.into(),
             client_id: None,
             chip_family: None,
+            owner: None,
         }
     }
 
@@ -201,6 +244,14 @@ impl AiotDeviceCreateCommand {
 
     pub fn with_chip_family(mut self, chip_family: impl Into<String>) -> Self {
         self.chip_family = Some(chip_family.into());
+        self
+    }
+
+    /// Registers the device under an explicit ownership relation instead of the
+    /// default self-owned (`device`) relation. The user console sets
+    /// [`AiotDeviceOwnerScope::user`] here.
+    pub fn with_owner(mut self, owner: AiotDeviceOwnerScope) -> Self {
+        self.owner = Some(owner);
         self
     }
 }
@@ -268,6 +319,30 @@ pub trait AiotDeviceRepository: Send + Sync {
         association: &AiotStorageAssociation,
         params: OffsetListPageParams,
     ) -> Result<AiotOffsetListResult<AiotDeviceRecord>, AiotDeviceRepositoryError>;
+
+    /// Lists the devices owned by one explicit owner relation.
+    ///
+    /// Used by the user console, where the page must contain exactly the devices
+    /// the signed-in user registered. Implementations that do not model
+    /// ownership fail closed instead of leaking the tenant-wide list.
+    fn list_devices_by_owner(
+        &self,
+        _association: &AiotStorageAssociation,
+        _owner: &AiotDeviceOwnerScope,
+        _params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotDeviceRecord>, AiotDeviceRepositoryError> {
+        Err(AiotDeviceRepositoryError::PersistenceFailure)
+    }
+
+    /// Retrieves one device only when it belongs to the given owner relation.
+    fn get_device_by_owner(
+        &self,
+        _association: &AiotStorageAssociation,
+        _owner: &AiotDeviceOwnerScope,
+        _device_id: &str,
+    ) -> Option<AiotDeviceRecord> {
+        None
+    }
     /// Rollout/batch targeting: returns device ids only, optionally filtered by product, bounded by limit.
     fn list_device_ids_for_rollout(
         &self,
@@ -803,10 +878,19 @@ impl AiotDeviceRepository for InMemoryAiotDeviceRepository {
 
         let id = (state.next_device_pk + 1).to_string();
         state.next_device_pk += 1;
+        let owner = command.owner.unwrap_or_else(|| {
+            AiotDeviceOwnerScope::self_owned(
+                command.association.tenant_id,
+                command.association.organization_id,
+                command.device_id.clone(),
+            )
+        });
         let record = AiotDeviceRecord {
             id,
             tenant_id: command.association.tenant_id,
             organization_id: command.association.organization_id,
+            owner_type: owner.owner_type,
+            owner_id: owner.owner_id,
             device_id: command.device_id,
             display_name: command.display_name,
             product_id: command.product_id,
@@ -851,6 +935,46 @@ impl AiotDeviceRepository for InMemoryAiotDeviceRepository {
             .cloned()
             .collect::<Vec<_>>();
         Ok(paginate_vec(items, params))
+    }
+
+    fn list_devices_by_owner(
+        &self,
+        association: &AiotStorageAssociation,
+        owner: &AiotDeviceOwnerScope,
+        params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotDeviceRecord>, AiotDeviceRepositoryError> {
+        let items = self
+            .state
+            .lock()
+            .expect("in-memory device repo poisoned")
+            .devices
+            .values()
+            .filter(|device| {
+                device.tenant_id == association.tenant_id
+                    && device.organization_id == association.organization_id
+                    && device.owner_type == owner.owner_type
+                    && device.owner_id == owner.owner_id
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        Ok(paginate_vec(items, params))
+    }
+
+    fn get_device_by_owner(
+        &self,
+        association: &AiotStorageAssociation,
+        owner: &AiotDeviceOwnerScope,
+        device_id: &str,
+    ) -> Option<AiotDeviceRecord> {
+        self.state
+            .lock()
+            .expect("in-memory device repo poisoned")
+            .devices
+            .get(&scoped_device_key(association, device_id))
+            .filter(|device| {
+                device.owner_type == owner.owner_type && device.owner_id == owner.owner_id
+            })
+            .cloned()
     }
 
     fn list_device_ids_for_rollout(
@@ -2158,7 +2282,8 @@ pub fn table_contract(name: &str) -> Option<AiotTableContract> {
             .with_index("uk_iot_device_tenant_product_device_id")
             .with_index("uk_iot_device_tenant_client_id")
             .with_index("idx_iot_device_tenant_product_status")
-            .with_index("idx_iot_device_tenant_last_seen"),
+            .with_index("idx_iot_device_tenant_last_seen")
+            .with_index("idx_iot_device_tenant_owner"),
         ),
         "iot_device_credential" => Some(
             AiotTableContract::new(
@@ -2182,7 +2307,8 @@ pub fn table_contract(name: &str) -> Option<AiotTableContract> {
             .with_column("device_id")
             .with_column("target_type")
             .with_column("target_id")
-            .with_index("idx_iot_device_binding_tenant_target"),
+            .with_index("idx_iot_device_binding_tenant_target")
+            .with_index("idx_iot_device_binding_tenant_device"),
         ),
         "iot_gateway_child_device" => Some(
             AiotTableContract::new(

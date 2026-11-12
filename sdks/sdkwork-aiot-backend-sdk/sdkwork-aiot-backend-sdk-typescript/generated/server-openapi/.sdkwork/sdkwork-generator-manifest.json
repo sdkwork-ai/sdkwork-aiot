@@ -3,7 +3,7 @@
   "generator": "@sdkwork/sdk-generator",
   "sdk": {
     "name": "sdkwork-aiot-backend-sdk",
-    "version": "0.1.15",
+    "version": "0.1.16",
     "language": "typescript",
     "sdkType": "backend",
     "protocol": "http",
@@ -32,7 +32,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "3b93e7609a860f670b536ae5989d5b00a097fc0e778f7d5dc7f51a217ec962ac"
+      "sha256": "15d73c120c9b2bac226c2bb1bb219f1808f3cc5750ea21d1df583254d46de42e"
     },
     {
       "path": "LICENSE",
@@ -40,7 +40,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "5e9746bf119a80bc034c1b46dac3a120f77f61da37b7851e08f40ba3c4597737"
+      "sha256": "c272c76769fbe55b8e8ea3006ad2e35ace9271a058336610c7f0982d629d1a32"
     },
     {
       "path": "README.md",
@@ -48,7 +48,7 @@
     },
     {
       "path": "sdkwork-sdk.json",
-      "sha256": "5ca7e971a58361d96a120ee8f19a58ba86ed9fdfdf32b3471db02e64cc1d7905"
+      "sha256": "a9328a87333638d68524e465841c700a884b2c2f21c941622e4f5d8a51ea5ad3"
     },
     {
       "path": "src/api/base.ts",

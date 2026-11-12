@@ -2,8 +2,9 @@ use sdkwork_aiot_storage::{
     AiotCommandCreateCommand, AiotCommandDeliveryEnqueueCommand, AiotCommandDeliveryRecord,
     AiotCommandDeliveryRepository, AiotCommandDeliveryRepositoryError, AiotCommandRecord,
     AiotCommandRepository, AiotCommandRepositoryError, AiotCommandResultRecord,
-    AiotDeviceCreateCommand, AiotDeviceEventCreateCommand, AiotDeviceEventRecord, AiotDeviceRecord,
-    AiotDeviceRepository, AiotDeviceRepositoryError, AiotDeviceSessionRecord,
+    AiotDeviceCreateCommand, AiotDeviceEventCreateCommand, AiotDeviceEventRecord,
+    AiotDeviceOwnerScope, AiotDeviceRecord, AiotDeviceRepository, AiotDeviceRepositoryError,
+    AiotDeviceSessionRecord,
     AiotDeviceSessionRepository, AiotDeviceTwinRepository, AiotDeviceTwinRepositoryError,
     AiotDeviceTwinSnapshot, AiotDeviceUpdateCommand, AiotEventRepository, AiotEventRepositoryError,
     AiotOffsetListResult, AiotStorageAssociation, AiotTwinPropertyUpsertCommand,
@@ -357,10 +358,19 @@ impl AiotDeviceRepository for SqlxDeviceRepository {
 
                     let next_id = allocate_row_id(&mut tx, dialect, "iot_device").await?;
 
+                    let owner = command.owner.unwrap_or_else(|| {
+                        AiotDeviceOwnerScope::self_owned(
+                            command.association.tenant_id,
+                            command.association.organization_id,
+                            command.device_id.clone(),
+                        )
+                    });
                     let record = AiotDeviceRecord {
                         id: next_id.to_string(),
                         tenant_id: command.association.tenant_id,
                         organization_id: command.association.organization_id,
+                        owner_type: owner.owner_type,
+                        owner_id: owner.owner_id,
                         device_id: command.device_id,
                         display_name: command.display_name,
                         product_id: command.product_id,
@@ -394,7 +404,7 @@ impl AiotDeviceRepository for SqlxDeviceRepository {
         self.db
             .run_owned(|pool| async move {
                 let sql = pool.adapt_sql(
-                    "SELECT id, tenant_id, organization_id, device_id, display_name, product_id, client_id, chip_family, status, metadata, last_seen_at FROM iot_device WHERE tenant_id = ?1 AND organization_id = ?2 AND device_id = ?3 LIMIT 1",
+                    "SELECT id, tenant_id, organization_id, owner_type, owner_id, device_id, display_name, product_id, client_id, chip_family, status, metadata, last_seen_at FROM iot_device WHERE tenant_id = ?1 AND organization_id = ?2 AND device_id = ?3 LIMIT 1",
                 );
                 match pool.engine() {
                     DeviceDatabaseEngine::Sqlite => {
@@ -435,7 +445,7 @@ impl AiotDeviceRepository for SqlxDeviceRepository {
                     "SELECT COUNT(1) FROM iot_device WHERE tenant_id = ?1 AND organization_id = ?2",
                 );
                 let list_sql = pool.adapt_sql(
-                    "SELECT id, tenant_id, organization_id, device_id, display_name, product_id, client_id, chip_family, status, metadata, last_seen_at FROM iot_device WHERE tenant_id = ?1 AND organization_id = ?2 ORDER BY id ASC LIMIT ?3 OFFSET ?4",
+                    "SELECT id, tenant_id, organization_id, owner_type, owner_id, device_id, display_name, product_id, client_id, chip_family, status, metadata, last_seen_at FROM iot_device WHERE tenant_id = ?1 AND organization_id = ?2 ORDER BY id ASC LIMIT ?3 OFFSET ?4",
                 );
                 let limit = params.page_size.max(1);
                 let offset = params.offset.max(0);
@@ -485,6 +495,125 @@ impl AiotDeviceRepository for SqlxDeviceRepository {
                 }
             })
             .map_err(map_device_sql_error)
+    }
+
+    fn list_devices_by_owner(
+        &self,
+        association: &AiotStorageAssociation,
+        owner: &AiotDeviceOwnerScope,
+        params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotDeviceRecord>, AiotDeviceRepositoryError> {
+        let association = association.clone();
+        let owner = owner.clone();
+        self.db
+            .run_owned(|pool| async move {
+                let count_sql = pool.adapt_sql(
+                    "SELECT COUNT(1) FROM iot_device WHERE tenant_id = ?1 AND organization_id = ?2 AND owner_type = ?3 AND owner_id = ?4",
+                );
+                let list_sql = pool.adapt_sql(
+                    "SELECT id, tenant_id, organization_id, owner_type, owner_id, device_id, display_name, product_id, client_id, chip_family, status, metadata, last_seen_at FROM iot_device WHERE tenant_id = ?1 AND organization_id = ?2 AND owner_type = ?3 AND owner_id = ?4 ORDER BY id ASC LIMIT ?5 OFFSET ?6",
+                );
+                let limit = params.page_size.max(1);
+                let offset = params.offset.max(0);
+                match pool.engine() {
+                    DeviceDatabaseEngine::Sqlite => {
+                        let total: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(count_sql.as_str()))
+                            .bind(association.tenant_id)
+                            .bind(association.organization_id)
+                            .bind(&owner.owner_type)
+                            .bind(&owner.owner_id)
+                            .fetch_one(pool.sqlite_pool().expect("sqlite pool"))
+                            .await?;
+                        let rows = sqlx::query(sqlx::AssertSqlSafe(list_sql.as_str()))
+                            .bind(association.tenant_id)
+                            .bind(association.organization_id)
+                            .bind(&owner.owner_type)
+                            .bind(&owner.owner_id)
+                            .bind(limit)
+                            .bind(offset)
+                            .fetch_all(pool.sqlite_pool().expect("sqlite pool"))
+                            .await?;
+                        Ok::<AiotOffsetListResult<AiotDeviceRecord>, sqlx::Error>(AiotOffsetListResult {
+                            items: rows
+                                .iter()
+                                .filter_map(|row| row_to_device_record(row).ok())
+                                .collect(),
+                            total,
+                        })
+                    }
+                    DeviceDatabaseEngine::Postgres => {
+                        let total: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(count_sql.as_str()))
+                            .bind(association.tenant_id)
+                            .bind(association.organization_id)
+                            .bind(&owner.owner_type)
+                            .bind(&owner.owner_id)
+                            .fetch_one(pool.postgres_pool().expect("postgres pool"))
+                            .await?;
+                        let rows = sqlx::query(sqlx::AssertSqlSafe(list_sql.as_str()))
+                            .bind(association.tenant_id)
+                            .bind(association.organization_id)
+                            .bind(&owner.owner_type)
+                            .bind(&owner.owner_id)
+                            .bind(limit)
+                            .bind(offset)
+                            .fetch_all(pool.postgres_pool().expect("postgres pool"))
+                            .await?;
+                        Ok(AiotOffsetListResult {
+                            items: rows
+                                .iter()
+                                .filter_map(|row| row_to_device_record_postgres(row).ok())
+                                .collect(),
+                            total,
+                        })
+                    }
+                }
+            })
+            .map_err(map_device_sql_error)
+    }
+
+    fn get_device_by_owner(
+        &self,
+        association: &AiotStorageAssociation,
+        owner: &AiotDeviceOwnerScope,
+        device_id: &str,
+    ) -> Option<AiotDeviceRecord> {
+        let association = association.clone();
+        let owner = owner.clone();
+        let device_id = device_id.to_string();
+        self.db
+            .run_owned(|pool| async move {
+                let sql = pool.adapt_sql(
+                    "SELECT id, tenant_id, organization_id, owner_type, owner_id, device_id, display_name, product_id, client_id, chip_family, status, metadata, last_seen_at FROM iot_device WHERE tenant_id = ?1 AND organization_id = ?2 AND owner_type = ?3 AND owner_id = ?4 AND device_id = ?5 LIMIT 1",
+                );
+                match pool.engine() {
+                    DeviceDatabaseEngine::Sqlite => {
+                        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+                            .bind(association.tenant_id)
+                            .bind(association.organization_id)
+                            .bind(&owner.owner_type)
+                            .bind(&owner.owner_id)
+                            .bind(&device_id)
+                            .fetch_optional(pool.sqlite_pool().expect("sqlite pool"))
+                            .await?;
+                        row.as_ref().map(row_to_device_record).transpose()
+                    }
+                    DeviceDatabaseEngine::Postgres => {
+                        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+                            .bind(association.tenant_id)
+                            .bind(association.organization_id)
+                            .bind(&owner.owner_type)
+                            .bind(&owner.owner_id)
+                            .bind(&device_id)
+                            .fetch_optional(pool.postgres_pool().expect("postgres pool"))
+                            .await?;
+                        row.as_ref()
+                            .map(row_to_device_record_postgres)
+                            .transpose()
+                    }
+                }
+            })
+            .ok()
+            .flatten()
     }
 
     fn list_device_ids_for_rollout(
@@ -2102,6 +2231,8 @@ fn row_to_device_record(row: &sqlx::sqlite::SqliteRow) -> Result<AiotDeviceRecor
     let id: i64 = row.try_get("id")?;
     let tenant_id: i64 = row.try_get("tenant_id")?;
     let organization_id: i64 = row.try_get("organization_id")?;
+    let owner_type: String = row.try_get("owner_type")?;
+    let owner_id: String = row.try_get("owner_id")?;
     let device_id: String = row.try_get("device_id")?;
     let display_name: String = row.try_get("display_name")?;
     let product_id: i64 = row.try_get("product_id")?;
@@ -2114,6 +2245,8 @@ fn row_to_device_record(row: &sqlx::sqlite::SqliteRow) -> Result<AiotDeviceRecor
         id: id.to_string(),
         tenant_id,
         organization_id,
+        owner_type,
+        owner_id,
         device_id,
         display_name,
         product_id: product_id.to_string(),
@@ -2131,6 +2264,8 @@ fn row_to_device_record_postgres(
     let id: i64 = row.try_get("id")?;
     let tenant_id: i64 = row.try_get("tenant_id")?;
     let organization_id: i64 = row.try_get("organization_id")?;
+    let owner_type: String = row.try_get("owner_type")?;
+    let owner_id: String = row.try_get("owner_id")?;
     let device_id: String = row.try_get("device_id")?;
     let display_name: String = row.try_get("display_name")?;
     let product_id: i64 = row.try_get("product_id")?;
@@ -2143,6 +2278,8 @@ fn row_to_device_record_postgres(
         id: id.to_string(),
         tenant_id,
         organization_id,
+        owner_type,
+        owner_id,
         device_id,
         display_name,
         product_id: product_id.to_string(),

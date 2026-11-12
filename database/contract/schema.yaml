@@ -111,3 +111,9 @@ tables:
   - name: iot_protocol_ingest_record
     lifecycle_status: active
     owner: aiot-platform
+  - name: iot_admin_entity
+    lifecycle_status: active
+    owner: aiot-platform
+  - name: iot_row_id_allocator
+    lifecycle_status: active
+    owner: aiot-platform

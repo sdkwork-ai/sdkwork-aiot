@@ -176,6 +176,24 @@ impl AiotCatalogRepositoryHandle {
         ))
     }
 
+    /// App-surface product catalog.
+    ///
+    /// A user may only register a device against a product that is still in
+    /// service, so archived/disabled products are excluded before pagination:
+    /// filtering after paging would return short pages and an inflated total.
+    pub fn list_products_page_for_registration(
+        &self,
+        association: &AiotStorageAssociation,
+        params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotProductRecord>, AiotCatalogRepositoryError> {
+        let active: Vec<AiotProductRecord> = self
+            .list_products(association)
+            .into_iter()
+            .filter(|record| is_active_product_status(&record.status))
+            .collect();
+        Ok(paginate_memory_catalog(active, params))
+    }
+
     pub fn update_product(
         &self,
         association: AiotStorageAssociation,
@@ -737,6 +755,24 @@ impl AiotFirmwareRepositoryHandle {
         ))
     }
 
+    /// App-surface firmware catalog: only published artifacts are downloadable.
+    ///
+    /// The management surface lists every artifact (draft included); the user
+    /// console must never expose a draft as a download, so the filter runs before
+    /// pagination to keep pages dense and the total honest.
+    pub fn list_published_artifacts_page(
+        &self,
+        association: &AiotStorageAssociation,
+        params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotFirmwareArtifactRecord>, AiotFirmwareRepositoryError> {
+        let published: Vec<AiotFirmwareArtifactRecord> = self
+            .list_artifacts(association)
+            .into_iter()
+            .filter(|artifact| artifact.status.eq_ignore_ascii_case(FIRMWARE_STATUS_PUBLISHED))
+            .collect();
+        Ok(paginate_memory_catalog(published, params))
+    }
+
     pub fn get_artifact(
         &self,
         association: &AiotStorageAssociation,
@@ -1056,6 +1092,27 @@ fn product_record_json(record: &AiotProductRecord) -> String {
         "status": record.status,
     })
     .to_string()
+}
+
+/// Firmware status that makes an artifact downloadable from the user console.
+const FIRMWARE_STATUS_PUBLISHED: &str = "published";
+
+/// Product statuses that keep a product out of the user registration catalog.
+const PRODUCT_INACTIVE_STATUSES: &[&str] = &["archived", "disabled", "inactive", "deleted", "retired"];
+
+/// True when users may register devices against a product with this status.
+///
+/// Unknown/blank statuses stay eligible: the catalog is authored by
+/// administrators through the management surface, and only the explicit
+/// retirement states must block self-service registration.
+pub(crate) fn is_active_product_status(status: &str) -> bool {
+    let normalized = status.trim();
+    if normalized.is_empty() {
+        return true;
+    }
+    !PRODUCT_INACTIVE_STATUSES
+        .iter()
+        .any(|inactive| normalized.eq_ignore_ascii_case(inactive))
 }
 
 fn parse_product_record(payload_json: &str) -> Option<AiotProductRecord> {

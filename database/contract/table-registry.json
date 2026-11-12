@@ -205,6 +205,18 @@
       "owner": "aiot-platform",
       "compliance_level": "L2",
       "lifecycle_status": "active"
+    },
+    {
+      "table_name": "iot_admin_entity",
+      "owner": "aiot-platform",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
+      "table_name": "iot_row_id_allocator",
+      "owner": "aiot-platform",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
     }
   ]
 }

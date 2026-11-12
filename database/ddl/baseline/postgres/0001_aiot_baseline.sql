@@ -162,6 +162,12 @@ CREATE INDEX IF NOT EXISTS idx_iot_device_tenant_product_status
 CREATE INDEX IF NOT EXISTS idx_iot_device_tenant_last_seen
     ON iot_device (tenant_id, last_seen_at);
 
+-- User-owned hardware: the console lists the devices a signed-in user registered
+-- (owner_type = 'user', owner_id = <iam user id>). The composite index keeps that
+-- ownership-filtered page scan on the same table without touching the tenant list.
+CREATE INDEX IF NOT EXISTS idx_iot_device_tenant_owner
+    ON iot_device (tenant_id, owner_type, owner_id);
+
 CREATE TABLE IF NOT EXISTS iot_device_credential (
     id BIGINT NOT NULL,
     uuid VARCHAR(64) NOT NULL,

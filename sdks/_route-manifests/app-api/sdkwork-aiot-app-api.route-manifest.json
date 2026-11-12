@@ -78,6 +78,138 @@
       "auth": {
         "dataScope": "organization",
         "mode": "dual-token",
+        "permission": "iot.devices.write",
+        "required": true,
+        "tenantScope": "tenant"
+      },
+      "handler": {
+        "module": "sdkwork_iot_platform_service",
+        "name": "devices.create"
+      },
+      "method": "POST",
+      "operationId": "devices.create",
+      "ownership": {
+        "apiAuthority": "sdkwork-aiot-app-api",
+        "owner": "sdkwork-aiot"
+      },
+      "path": "/app/v3/api/iot/devices",
+      "requestContext": "WebRequestContext",
+      "schemas": {
+        "problem": "ProblemDetail",
+        "request": null,
+        "response": null
+      },
+      "source": {
+        "file": "crates/sdkwork-iot-platform-service/src/lib.rs"
+      },
+      "tags": [
+        "iot.devices"
+      ]
+    },
+    {
+      "apiSurface": "app-api",
+      "auth": {
+        "dataScope": "organization",
+        "mode": "dual-token",
+        "permission": "iot.devices.write",
+        "required": true,
+        "tenantScope": "tenant"
+      },
+      "handler": {
+        "module": "sdkwork_iot_platform_service",
+        "name": "devices.update"
+      },
+      "method": "PUT",
+      "operationId": "devices.update",
+      "ownership": {
+        "apiAuthority": "sdkwork-aiot-app-api",
+        "owner": "sdkwork-aiot"
+      },
+      "path": "/app/v3/api/iot/devices/{deviceId}",
+      "requestContext": "WebRequestContext",
+      "schemas": {
+        "problem": "ProblemDetail",
+        "request": null,
+        "response": null
+      },
+      "source": {
+        "file": "crates/sdkwork-iot-platform-service/src/lib.rs"
+      },
+      "tags": [
+        "iot.devices"
+      ]
+    },
+    {
+      "apiSurface": "app-api",
+      "auth": {
+        "dataScope": "organization",
+        "mode": "dual-token",
+        "permission": "iot.products.read",
+        "required": true,
+        "tenantScope": "tenant"
+      },
+      "handler": {
+        "module": "sdkwork_iot_platform_service",
+        "name": "products.list"
+      },
+      "method": "GET",
+      "operationId": "products.list",
+      "ownership": {
+        "apiAuthority": "sdkwork-aiot-app-api",
+        "owner": "sdkwork-aiot"
+      },
+      "path": "/app/v3/api/iot/products",
+      "requestContext": "WebRequestContext",
+      "schemas": {
+        "problem": "ProblemDetail",
+        "request": null,
+        "response": null
+      },
+      "source": {
+        "file": "crates/sdkwork-iot-platform-service/src/lib.rs"
+      },
+      "tags": [
+        "iot.products"
+      ]
+    },
+    {
+      "apiSurface": "app-api",
+      "auth": {
+        "dataScope": "organization",
+        "mode": "dual-token",
+        "permission": "iot.firmware.read",
+        "required": true,
+        "tenantScope": "tenant"
+      },
+      "handler": {
+        "module": "sdkwork_iot_platform_service",
+        "name": "firmwareArtifacts.list"
+      },
+      "method": "GET",
+      "operationId": "firmwareArtifacts.list",
+      "ownership": {
+        "apiAuthority": "sdkwork-aiot-app-api",
+        "owner": "sdkwork-aiot"
+      },
+      "path": "/app/v3/api/iot/firmware_artifacts",
+      "requestContext": "WebRequestContext",
+      "schemas": {
+        "problem": "ProblemDetail",
+        "request": null,
+        "response": null
+      },
+      "source": {
+        "file": "crates/sdkwork-iot-platform-service/src/lib.rs"
+      },
+      "tags": [
+        "iot.firmwareArtifacts"
+      ]
+    },
+    {
+      "apiSurface": "app-api",
+      "auth": {
+        "dataScope": "organization",
+        "mode": "dual-token",
         "permission": "iot.commands.execute",
         "required": true,
         "tenantScope": "tenant"
@@ -93,7 +225,6 @@
         "owner": "sdkwork-aiot"
       },
       "path": "/app/v3/api/iot/devices/{deviceId}/commands",
-      "rateLimitTier": "authCritical",
       "requestContext": "WebRequestContext",
       "schemas": {
         "problem": "ProblemDetail",

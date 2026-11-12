@@ -1601,6 +1601,8 @@ fn sqlx_pool_sql_statement_executor_persists_device_create_batch() {
         id: "1".to_string(),
         tenant_id: 100001,
         organization_id: 0,
+        owner_type: "device".to_string(),
+        owner_id: "100001:0:sqlx-device-001".to_string(),
         device_id: "sqlx-device-001".to_string(),
         display_name: "Sqlx Device".to_string(),
         product_id: "1008".to_string(),
