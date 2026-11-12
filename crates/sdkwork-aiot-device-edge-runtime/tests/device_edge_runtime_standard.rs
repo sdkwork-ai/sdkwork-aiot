@@ -3212,3 +3212,97 @@ fn extract_json_numeric_id(text: &str) -> u64 {
         .and_then(|value| value.parse::<u64>().ok())
         .expect("numeric json id")
 }
+
+#[test]
+fn xiaozhi_mcp_tool_invocation_correlates_device_response() {
+    use std::time::Duration;
+
+    let device_id = "dev-mcp-call-001";
+    let session_id = "mcp-call-session-001";
+    sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_clear_session(session_id);
+    sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_begin_initialize(session_id, 1);
+    let tools_request = sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_on_mcp_message(
+        session_id,
+        "response",
+        None,
+        r#"{"jsonrpc":"2.0","id":1,"result":{}}"#,
+    )
+    .expect("tools/list request");
+    let tools_request_id = extract_json_numeric_id(&tools_request);
+    let tools_response = format!(
+        r#"{{"jsonrpc":"2.0","id":{tools_request_id},"result":{{"tools":[{{"name":"self.audio_speaker.set_volume","description":"Set volume","inputSchema":{{"type":"object"}}}}]}}}}"#
+    );
+    assert!(
+        sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_on_mcp_message(
+            session_id,
+            "response",
+            None,
+            &tools_response,
+        )
+        .is_none()
+    );
+    assert!(
+        sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_session_tools(session_id)
+            .iter()
+            .any(|tool| tool.name == "self.audio_speaker.set_volume")
+    );
+
+    let (sender, receiver) = std::sync::mpsc::channel();
+    sdkwork_aiot_device_edge_runtime::register_active_ws_session(
+        device_id,
+        session_id,
+        sender,
+        Default::default(),
+    );
+    let device_task = std::thread::spawn(move || {
+        let replies = receiver
+            .recv_timeout(Duration::from_secs(2))
+            .expect("server-initiated tool call frame");
+        let text = match &replies[0] {
+            sdkwork_aiot_device_edge_runtime::WebSocketSessionReply::Text(text) => text.clone(),
+            other => panic!("expected text frame, got {other:?}"),
+        };
+        assert!(text.contains(r#""method":"tools/call""#));
+        assert!(text.contains(r#""name":"self.audio_speaker.set_volume""#));
+        let request_id = extract_json_numeric_id(&text);
+        let response = format!(
+            r#"{{"session_id":"{session_id}","type":"mcp","payload":{{"jsonrpc":"2.0","id":{request_id},"result":{{"content":[{{"type":"text","text":"volume accepted"}}],"isError":false}}}}}}"#
+        );
+        assert!(
+            sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_complete_tool_call(
+                device_id, None, "response", &response,
+            )
+        );
+    });
+
+    let result = sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_invoke_tool(
+        device_id,
+        session_id,
+        "self.audio_speaker.set_volume",
+        r#"{"volume":30}"#,
+        2_000,
+    )
+    .expect("tool result");
+    assert_eq!(result["content"][0]["text"], "volume accepted");
+    device_task.join().expect("device task");
+    sdkwork_aiot_device_edge_runtime::unregister_active_ws_session(device_id);
+    sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_clear_session(session_id);
+}
+
+#[test]
+fn xiaozhi_mcp_tool_invocation_rejects_unknown_tools_and_offline_devices() {
+    let session_id = "mcp-call-missing-session";
+    sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_clear_session(session_id);
+    let missing = sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_invoke_tool(
+        "dev-mcp-call-missing",
+        session_id,
+        "self.camera.take_photo",
+        "{}",
+        100,
+    )
+    .expect_err("unknown tool");
+    assert!(matches!(
+        missing,
+        sdkwork_aiot_device_edge_runtime::XiaozhiToolInvokeError::ToolNotFound
+    ));
+}

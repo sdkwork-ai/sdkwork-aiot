@@ -14,7 +14,7 @@ use sdkwork_aiot_device_edge_runtime::{
 };
 
 const HTTP_READ_TIMEOUT: Duration = Duration::from_secs(5);
-const XIAOZHI_WEBSOCKET_READ_TIMEOUT: Duration = Duration::from_secs(125);
+const XIAOZHI_WEBSOCKET_READ_POLL_TIMEOUT: Duration = Duration::from_millis(200);
 const DEFAULT_MQTT_KEEPALIVE_SECONDS: u64 = 30;
 const DEFAULT_MQTT_QUEUE_CAPACITY: usize = 16;
 const DEFAULT_MQTT_RECONNECT_BASE_MILLIS: u64 = 500;
@@ -35,6 +35,7 @@ const MCP_POLICY_STATS_PATH: &str = "/internal/xiaozhi/mcp-policy/stats";
 const ACTIVATION_REGISTRY_STATS_PATH: &str = "/internal/xiaozhi/activation-registry/stats";
 const ACTIVATION_REGISTRY_METRICS_PATH: &str = "/internal/xiaozhi/activation-registry/metrics";
 const MCP_TOOLS_PATH: &str = "/internal/xiaozhi/mcp_tools";
+const MCP_TOOL_CALLS_PATH: &str = "/internal/xiaozhi/mcp_tools/call";
 
 fn main() {
     sdkwork_database_sqlx::enable_process_shared_database_pool();
@@ -1097,6 +1098,12 @@ fn handle_client_connection(
             let _ = stream.write_all(response.as_bytes());
             return;
         }
+        if request.method == "POST" && request.path == MCP_TOOL_CALLS_PATH {
+            let response = xiaozhi_mcp_tool_call_response(&request);
+            let response = format_response(&response);
+            let _ = stream.write_all(response.as_bytes());
+            return;
+        }
 
         if is_websocket_upgrade(&request)
             && request.path == sdkwork_aiot_adapter_xiaozhi::XIAOZHI_WS_PATH
@@ -1176,7 +1183,7 @@ fn handle_xiaozhi_websocket_session(
     initial_frame_bytes: Vec<u8>,
     mut stream: TcpStream,
 ) {
-    let _ = stream.set_read_timeout(Some(XIAOZHI_WEBSOCKET_READ_TIMEOUT));
+    let _ = stream.set_read_timeout(Some(XIAOZHI_WEBSOCKET_READ_POLL_TIMEOUT));
 
     let device_id = request
         .header(DEVICE_ID_HEADER)
@@ -1239,6 +1246,17 @@ fn handle_xiaozhi_websocket_session(
         let read = match stream.read(&mut read_buffer) {
             Ok(0) => return,
             Ok(read) => read,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                // The socket timeout is a polling tick: it lets the session
+                // flush server-initiated frames (commands, MCP tool calls)
+                // while the device is idle.
+                continue;
+            }
             Err(error) => {
                 eprintln!("sdkwork-aiot-device-edge-runtime websocket_read_error={error}");
                 return;
@@ -1467,6 +1485,112 @@ fn mcp_policy_stats_response(
     sdkwork_aiot_transport::HttpResponse::new(sdkwork_aiot_transport::HttpStatus::Ok)
         .with_header("content-type", "application/json")
         .with_body(body)
+}
+
+fn xiaozhi_mcp_tool_call_response(
+    request: &sdkwork_aiot_transport::HttpRequest,
+) -> sdkwork_aiot_transport::HttpResponse {
+    let value: serde_json::Value = match serde_json::from_slice(&request.body) {
+        Ok(value) => value,
+        Err(_) => {
+            return problem_json_response(
+                sdkwork_aiot_transport::HttpStatus::BadRequest,
+                "iot.device-edge.mcp_tool.invalid_json",
+                r#""detail":"request body must be JSON""#,
+            );
+        }
+    };
+    let Some(device_id) = value
+        .get("deviceId")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return problem_json_response(
+            sdkwork_aiot_transport::HttpStatus::BadRequest,
+            "iot.device-edge.mcp_tool.device_id_required",
+            r#""detail":"deviceId is required""#,
+        );
+    };
+    let Some(tool_name) = value
+        .get("toolName")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return problem_json_response(
+            sdkwork_aiot_transport::HttpStatus::BadRequest,
+            "iot.device-edge.mcp_tool.tool_name_required",
+            r#""detail":"toolName is required""#,
+        );
+    };
+    let arguments = value
+        .get("arguments")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    if !arguments.is_object() {
+        return problem_json_response(
+            sdkwork_aiot_transport::HttpStatus::UnprocessableEntity,
+            "iot.device-edge.mcp_tool.invalid_arguments",
+            r#""detail":"arguments must be a JSON object""#,
+        );
+    }
+    let timeout_ms = value
+        .get("timeoutMs")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(sdkwork_aiot_device_edge_runtime::DEFAULT_TOOL_INVOKE_TIMEOUT_MS);
+    let Some(session_id) = sdkwork_aiot_device_edge_runtime::active_ws_session_id(device_id) else {
+        return problem_json_response(
+            sdkwork_aiot_transport::HttpStatus::NotFound,
+            "iot.device-edge.mcp_tool.session_not_found",
+            &format!(r#""deviceId":"{}""#, json_escape(device_id)),
+        );
+    };
+    match sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_invoke_tool(
+        device_id,
+        &session_id,
+        tool_name,
+        &arguments.to_string(),
+        timeout_ms,
+    ) {
+        Ok(result) => {
+            sdkwork_aiot_transport::HttpResponse::new(sdkwork_aiot_transport::HttpStatus::Ok)
+                .with_header("content-type", "application/json")
+                .with_body(
+                    serde_json::json!({
+                        "deviceId": device_id,
+                        "toolName": tool_name,
+                        "result": result,
+                    })
+                    .to_string(),
+                )
+        }
+        Err(error) => {
+            let status = match &error {
+                sdkwork_aiot_device_edge_runtime::XiaozhiToolInvokeError::Offline => {
+                    sdkwork_aiot_transport::HttpStatus::ServiceUnavailable
+                }
+                sdkwork_aiot_device_edge_runtime::XiaozhiToolInvokeError::ToolNotFound => {
+                    sdkwork_aiot_transport::HttpStatus::NotFound
+                }
+                sdkwork_aiot_device_edge_runtime::XiaozhiToolInvokeError::Timeout => {
+                    sdkwork_aiot_transport::HttpStatus::GatewayTimeout
+                }
+                sdkwork_aiot_device_edge_runtime::XiaozhiToolInvokeError::InvalidArguments(_) => {
+                    sdkwork_aiot_transport::HttpStatus::UnprocessableEntity
+                }
+                sdkwork_aiot_device_edge_runtime::XiaozhiToolInvokeError::DeviceError(_)
+                | sdkwork_aiot_device_edge_runtime::XiaozhiToolInvokeError::Transport(_) => {
+                    sdkwork_aiot_transport::HttpStatus::BadGateway
+                }
+            };
+            problem_json_response(
+                status,
+                error.code(),
+                &format!(r#""detail":"{}""#, json_escape(&error.detail())),
+            )
+        }
+    }
 }
 
 fn xiaozhi_mcp_tools_response(

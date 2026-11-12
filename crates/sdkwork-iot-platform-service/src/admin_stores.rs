@@ -768,7 +768,11 @@ impl AiotFirmwareRepositoryHandle {
         let published: Vec<AiotFirmwareArtifactRecord> = self
             .list_artifacts(association)
             .into_iter()
-            .filter(|artifact| artifact.status.eq_ignore_ascii_case(FIRMWARE_STATUS_PUBLISHED))
+            .filter(|artifact| {
+                artifact
+                    .status
+                    .eq_ignore_ascii_case(FIRMWARE_STATUS_PUBLISHED)
+            })
             .collect();
         Ok(paginate_memory_catalog(published, params))
     }
@@ -1098,7 +1102,8 @@ fn product_record_json(record: &AiotProductRecord) -> String {
 const FIRMWARE_STATUS_PUBLISHED: &str = "published";
 
 /// Product statuses that keep a product out of the user registration catalog.
-const PRODUCT_INACTIVE_STATUSES: &[&str] = &["archived", "disabled", "inactive", "deleted", "retired"];
+const PRODUCT_INACTIVE_STATUSES: &[&str] =
+    &["archived", "disabled", "inactive", "deleted", "retired"];
 
 /// True when users may register devices against a product with this status.
 ///

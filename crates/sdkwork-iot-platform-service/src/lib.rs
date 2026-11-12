@@ -47,13 +47,12 @@ use sdkwork_aiot_storage::{
     paginate_bounded_catalog, paginate_vec, AiotCommandCreateCommand, AiotCommandRecord,
     AiotCommandRepository, AiotCommandRepositoryError, AiotDeviceCreateCommand,
     AiotDeviceEventRecord, AiotDeviceOwnerScope, AiotDeviceRecord, AiotDeviceRepository,
-    AiotDeviceRepositoryError,
-    AiotDeviceSessionRecord, AiotDeviceSessionRepository, AiotDeviceTwinRepository,
-    AiotDeviceTwinRepositoryError, AiotDeviceTwinSnapshot, AiotDeviceUpdateCommand,
-    AiotEventRepository, AiotEventRepositoryError, AiotOffsetListResult, AiotStorageAssociation,
-    AiotTwinPropertyUpsertCommand, InMemoryAiotCommandRepository, InMemoryAiotDeviceRepository,
-    InMemoryAiotDeviceSessionRepository, InMemoryAiotDeviceTwinRepository,
-    InMemoryAiotEventRepository, OffsetListPageParams,
+    AiotDeviceRepositoryError, AiotDeviceSessionRecord, AiotDeviceSessionRepository,
+    AiotDeviceTwinRepository, AiotDeviceTwinRepositoryError, AiotDeviceTwinSnapshot,
+    AiotDeviceUpdateCommand, AiotEventRepository, AiotEventRepositoryError, AiotOffsetListResult,
+    AiotStorageAssociation, AiotTwinPropertyUpsertCommand, InMemoryAiotCommandRepository,
+    InMemoryAiotDeviceRepository, InMemoryAiotDeviceSessionRepository,
+    InMemoryAiotDeviceTwinRepository, InMemoryAiotEventRepository, OffsetListPageParams,
 };
 use sdkwork_aiot_transport::{build_health_response, HttpRequest, HttpResponse, HttpStatus};
 use sdkwork_iot_device_service::{
@@ -71,8 +70,8 @@ mod device_settings;
 mod firmware_rollout_planner;
 mod service_stores;
 
-pub use admin_stores::{AiotCatalogRepositoryHandle, AiotFirmwareRepositoryHandle};
 use admin_stores::is_active_product_status as product_status_allows_registration;
+pub use admin_stores::{AiotCatalogRepositoryHandle, AiotFirmwareRepositoryHandle};
 pub use device_hardware_tools::{
     AiotDeviceHardwareTool, AiotDeviceHardwareToolCatalog, AiotDeviceHardwareToolError,
     AiotDeviceHardwareToolSource, EdgeRuntimeHardwareToolSource,

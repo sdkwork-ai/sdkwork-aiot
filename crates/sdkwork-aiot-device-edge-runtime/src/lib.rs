@@ -2,6 +2,7 @@ mod active_ws_sessions;
 mod command_delivery_worker;
 mod mqtt_bridge_readiness;
 mod xiaozhi_mcp_catalog;
+mod xiaozhi_mcp_invoke;
 mod xiaozhi_ws_media_session;
 
 pub use active_ws_sessions::{
@@ -19,6 +20,10 @@ pub use xiaozhi_mcp_catalog::{
     next_request_id as xiaozhi_mcp_next_request_id, on_mcp_message as xiaozhi_mcp_on_mcp_message,
     session_tools as xiaozhi_mcp_session_tools,
     session_tools_json as xiaozhi_mcp_session_tools_json, XiaozhiMcpTool,
+};
+pub use xiaozhi_mcp_invoke::{
+    complete_tool_call as xiaozhi_mcp_complete_tool_call, invoke_tool as xiaozhi_mcp_invoke_tool,
+    XiaozhiToolInvokeError, DEFAULT_TOOL_INVOKE_TIMEOUT_MS, MAX_TOOL_INVOKE_TIMEOUT_MS,
 };
 
 use std::cell::RefCell;
@@ -2391,6 +2396,18 @@ pub fn xiaozhi_websocket_session_reply_with_mcp_tool_provider_and_invoker(
                     r#"{{"session_id":"{}","type":"mcp","payload":{next_payload}}}"#,
                     json_escape(&session_id)
                 )));
+            }
+            if let Some(device_id) = result.message.device_id.as_deref() {
+                xiaozhi_mcp_complete_tool_call(
+                    device_id,
+                    result
+                        .envelope
+                        .extensions
+                        .get("xiaozhi.mcp.id_json")
+                        .map(String::as_str),
+                    kind,
+                    inbound_json.unwrap_or(""),
+                );
             }
         }
         "audio" => {

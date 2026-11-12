@@ -195,11 +195,7 @@ impl AiotDeviceOwnerScope {
     }
 
     /// Owner of a device provisioned by a tenant/organization administrator.
-    pub fn self_owned(
-        tenant_id: i64,
-        organization_id: i64,
-        device_id: impl Into<String>,
-    ) -> Self {
+    pub fn self_owned(tenant_id: i64, organization_id: i64, device_id: impl Into<String>) -> Self {
         let device_id = device_id.into();
         Self::new(
             "device",
