@@ -71,6 +71,10 @@ impl AiotDeviceHardwareToolCatalog {
 pub enum AiotDeviceHardwareToolError {
     Unavailable(String),
     InvalidResponse(String),
+    NotFound(String),
+    Timeout(String),
+    InvalidArguments(String),
+    DeviceError(String),
 }
 
 pub trait AiotDeviceHardwareToolSource: Send + Sync {
@@ -78,6 +82,17 @@ pub trait AiotDeviceHardwareToolSource: Send + Sync {
         &self,
         device_id: &str,
     ) -> Result<AiotDeviceHardwareToolCatalog, AiotDeviceHardwareToolError>;
+
+    fn invoke_tool(
+        &self,
+        _device_id: &str,
+        _tool_name: &str,
+        _arguments_json: &str,
+    ) -> Result<Value, AiotDeviceHardwareToolError> {
+        Err(AiotDeviceHardwareToolError::Unavailable(
+            "hardware tool invocation is not configured".to_string(),
+        ))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -152,6 +167,60 @@ impl AiotDeviceHardwareToolSource for EdgeRuntimeHardwareToolSource {
             }
             Err(ureq::Error::Status(status, _)) => Err(AiotDeviceHardwareToolError::Unavailable(
                 format!("edge runtime hardware tool query failed with status {status}"),
+            )),
+            Err(error) => Err(AiotDeviceHardwareToolError::Unavailable(error.to_string())),
+        }
+    }
+
+    fn invoke_tool(
+        &self,
+        device_id: &str,
+        tool_name: &str,
+        arguments_json: &str,
+    ) -> Result<Value, AiotDeviceHardwareToolError> {
+        let arguments: Value = serde_json::from_str(arguments_json)
+            .map_err(|error| AiotDeviceHardwareToolError::InvalidArguments(error.to_string()))?;
+        if !arguments.is_object() {
+            return Err(AiotDeviceHardwareToolError::InvalidArguments(
+                "tool arguments must be a JSON object".to_string(),
+            ));
+        }
+        let body = serde_json::json!({
+            "deviceId": device_id,
+            "toolName": tool_name,
+            "arguments": arguments,
+        })
+        .to_string();
+        let url = format!("{}/internal/xiaozhi/mcp_tools/call", self.base_url);
+        let agent = ureq::AgentBuilder::new().timeout(self.timeout).build();
+        let mut request = agent.post(&url).set("content-type", "application/json");
+        if let Some(token) = self.internal_token.as_deref() {
+            request = request.set("x-sdkwork-internal-token", token);
+        }
+        match request.send_string(&body) {
+            Ok(response) => {
+                let body = response
+                    .into_string()
+                    .map_err(|error| AiotDeviceHardwareToolError::Unavailable(error.to_string()))?;
+                let value: Value = serde_json::from_str(&body).map_err(|error| {
+                    AiotDeviceHardwareToolError::InvalidResponse(error.to_string())
+                })?;
+                Ok(value.get("result").cloned().unwrap_or(Value::Null))
+            }
+            Err(ureq::Error::Status(404, _)) => Err(AiotDeviceHardwareToolError::NotFound(
+                "device or MCP tool was not found".to_string(),
+            )),
+            Err(ureq::Error::Status(408 | 504, _)) => Err(AiotDeviceHardwareToolError::Timeout(
+                "edge runtime timed out waiting for the device".to_string(),
+            )),
+            Err(ureq::Error::Status(422, _)) => Err(AiotDeviceHardwareToolError::InvalidArguments(
+                "device rejected the tool arguments".to_string(),
+            )),
+            Err(ureq::Error::Status(502, _)) => Err(AiotDeviceHardwareToolError::DeviceError(
+                "device returned an MCP error".to_string(),
+            )),
+            Err(ureq::Error::Status(status, _)) => Err(AiotDeviceHardwareToolError::Unavailable(
+                format!("edge runtime tool call failed with status {status}"),
             )),
             Err(error) => Err(AiotDeviceHardwareToolError::Unavailable(error.to_string())),
         }

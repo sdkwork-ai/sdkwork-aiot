@@ -1219,6 +1219,13 @@ pub fn standard_api_route_contracts() -> Vec<AiotApiRouteContract> {
         },
         AiotApiRouteContract {
             surface: AiotApiSurface::Admin,
+            method: "POST",
+            path: "/backend/v3/api/iot/devices/{deviceId}/hardware_tool_calls",
+            operation_id: "devices.hardwareTools.invoke",
+            required_permission: IOT_PERMISSION_COMMANDS_EXECUTE,
+        },
+        AiotApiRouteContract {
+            surface: AiotApiSurface::Admin,
             method: "PUT",
             path: "/backend/v3/api/iot/devices/{deviceId}/settings",
             operation_id: "devices.settings.update",
@@ -3956,6 +3963,96 @@ pub fn handle_resolved_api_request(
                     problem_detail_from_request(
                         request,
                         "api.device.hardware_tools.invalid_response",
+                        detail,
+                    )
+                }
+                Err(error) => problem_detail_from_request(
+                    request,
+                    "api.device.hardware_tools.unavailable",
+                    format!("{error:?}"),
+                ),
+            }
+        }
+        (AiotApiSurface::Admin, "devices.hardwareTools.invoke") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let device_id = device_id.as_deref().unwrap_or("unknown-device");
+            let association = match request_context_to_storage_association(context) {
+                Ok(association) => association,
+                Err(_) => {
+                    return problem_detail_from_request(
+                        request,
+                        "api.context.invalid_tenant_id",
+                        "Resolved tenant context is required",
+                    );
+                }
+            };
+            if server
+                .device_repository
+                .get_device(&association, device_id)
+                .is_none()
+            {
+                return problem_detail_from_request(
+                    request,
+                    "api.device.not_found",
+                    format!("Device {device_id} was not found"),
+                );
+            }
+            let payload = match device_hardware_tool_call_payload_from_request(request) {
+                Ok(payload) => payload,
+                Err(problem) => return problem,
+            };
+            match server.device_hardware_tool_source.invoke_tool(
+                device_id,
+                &payload.tool_name,
+                &payload.arguments_json,
+            ) {
+                Ok(result) => standard_resource_response(
+                    request,
+                    HttpStatus::Ok,
+                    serde_json::json!({
+                        "deviceId": device_id,
+                        "toolName": payload.tool_name,
+                        "result": result,
+                    })
+                    .to_string(),
+                ),
+                Err(AiotDeviceHardwareToolError::NotFound(detail)) => problem_detail_from_request(
+                    request,
+                    "api.device.hardware_tools.tool_not_found",
+                    detail,
+                ),
+                Err(AiotDeviceHardwareToolError::Timeout(detail)) => problem_detail_from_request(
+                    request,
+                    "api.device.hardware_tools.timeout",
+                    detail,
+                ),
+                Err(AiotDeviceHardwareToolError::InvalidArguments(detail)) => {
+                    problem_detail_with_errors(
+                        request,
+                        HttpStatus::UnprocessableEntity,
+                        SdkWorkResultCode::ValidationError,
+                        detail,
+                        &serde_json::json!([]),
+                    )
+                }
+                Err(AiotDeviceHardwareToolError::DeviceError(detail)) => {
+                    problem_detail_from_request(
+                        request,
+                        "api.device.hardware_tools.device_error",
+                        detail,
+                    )
+                }
+                Err(AiotDeviceHardwareToolError::Unavailable(detail))
+                | Err(AiotDeviceHardwareToolError::InvalidResponse(detail)) => {
+                    problem_detail_from_request(
+                        request,
+                        "api.device.hardware_tools.unavailable",
                         detail,
                     )
                 }
@@ -8274,4 +8371,60 @@ impl AiotApiError {
     pub fn new(code: impl Into<String>) -> Self {
         Self { code: code.into() }
     }
+}
+
+struct AiotDeviceHardwareToolCallPayload {
+    tool_name: String,
+    arguments_json: String,
+}
+
+fn device_hardware_tool_call_payload_from_request(
+    request: &HttpRequest,
+) -> Result<AiotDeviceHardwareToolCallPayload, HttpResponse> {
+    if request.body.iter().all(|byte| byte.is_ascii_whitespace()) {
+        return Err(problem_response(
+            HttpStatus::BadRequest,
+            "api.request.body.required",
+            "Request body is required",
+        ));
+    }
+    let body: JsonValue = serde_json::from_slice(&request.body).map_err(|_| {
+        problem_response(
+            HttpStatus::BadRequest,
+            "api.request.invalid_json",
+            "Request body must be valid JSON",
+        )
+    })?;
+    let obj = body.as_object().ok_or_else(|| {
+        problem_response(
+            HttpStatus::BadRequest,
+            "api.request.invalid_json_object",
+            "Request body must be a JSON object",
+        )
+    })?;
+    let tool_name = optional_json_string_field(obj, "toolName")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            problem_response(
+                HttpStatus::BadRequest,
+                "api.request.missing_field",
+                "toolName is required",
+            )
+        })?;
+    let arguments_json = match obj.get("arguments") {
+        None | Some(JsonValue::Null) => "{}".to_string(),
+        Some(JsonValue::Object(_)) => obj["arguments"].to_string(),
+        Some(_) => {
+            return Err(problem_response(
+                HttpStatus::UnprocessableEntity,
+                "api.request.invalid_field",
+                "arguments must be a JSON object",
+            ));
+        }
+    };
+    Ok(AiotDeviceHardwareToolCallPayload {
+        tool_name,
+        arguments_json,
+    })
 }
