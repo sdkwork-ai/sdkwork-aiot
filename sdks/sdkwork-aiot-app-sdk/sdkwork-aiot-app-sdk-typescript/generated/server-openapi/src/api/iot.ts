@@ -42,7 +42,7 @@ export class IotDevicesTwinApi {
 }
 
 export interface IotDevicesCommandsCreateParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export class IotDevicesCommandsApi {
@@ -54,10 +54,10 @@ export class IotDevicesCommandsApi {
 
 
 /** Create a device command */
-  async create(deviceId: string, body: AiotCommandCreateRequest, params?: IotDevicesCommandsCreateParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
+  async create(deviceId: string, body: AiotCommandCreateRequest, params: IotDevicesCommandsCreateParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );

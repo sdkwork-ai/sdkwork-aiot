@@ -10,6 +10,7 @@ struct ActiveWsSession {
     outbound: std::sync::mpsc::Sender<Vec<WebSocketSessionReply>>,
     last_touched: Instant,
     association: AiotStorageAssociation,
+    session_id: String,
 }
 
 fn store() -> &'static Mutex<HashMap<String, ActiveWsSession>> {
@@ -19,7 +20,7 @@ fn store() -> &'static Mutex<HashMap<String, ActiveWsSession>> {
 
 pub fn register_active_ws_session(
     device_id: &str,
-    _session_id: &str,
+    session_id: &str,
     outbound: std::sync::mpsc::Sender<Vec<WebSocketSessionReply>>,
     association: AiotStorageAssociation,
 ) {
@@ -30,6 +31,7 @@ pub fn register_active_ws_session(
                 outbound,
                 last_touched: Instant::now(),
                 association,
+                session_id: session_id.to_string(),
             },
         );
     }
@@ -57,6 +59,15 @@ pub fn touch_active_ws_session(device_id: &str) {
             session.last_touched = Instant::now();
         }
     }
+}
+
+/// Protocol session id of the live WebSocket session for a device, if any.
+pub fn active_ws_session_id(device_id: &str) -> Option<String> {
+    store().lock().ok().and_then(|guard| {
+        guard
+            .get(device_id)
+            .map(|session| session.session_id.clone())
+    })
 }
 
 pub fn evict_stale_active_ws_sessions(ttl: Duration) -> usize {
@@ -113,6 +124,10 @@ mod tests {
         let replies = receiver.recv().expect("outbound");
         assert_eq!(replies.len(), 1);
         assert_eq!(active_ws_device_ids(), vec!["dev-test"]);
+        assert_eq!(
+            active_ws_session_id("dev-test").as_deref(),
+            Some("session-test")
+        );
         unregister_active_ws_session("dev-test");
     }
 }

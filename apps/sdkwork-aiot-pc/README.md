@@ -18,3 +18,11 @@ pnpm dev
 ```
 
 Optional renderer overrides: copy `.env.example` into this directory when running a Vite shell locally.
+
+## Test toolchain pin
+
+`vite` is pinned to `8.0.3`. Vite/rolldown `8.1.x` rewrites the argument of a
+generated SDK method literally named `import(...)`, which produces a parse error
+in the `@sdkwork/agents-app-sdk` transport and fails every Vitest suite that
+loads `@sdkwork/aiot-pc-core`. Move the pin forward only after
+`pnpm --dir apps/sdkwork-aiot-pc exec vitest run` passes on the newer version.

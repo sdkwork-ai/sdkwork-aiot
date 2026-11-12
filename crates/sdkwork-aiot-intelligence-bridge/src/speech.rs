@@ -178,11 +178,12 @@ impl KernelSpeechPipeline {
     ) -> Result<crate::cloud_router::ProviderTtsAudio, String> {
         let request = OpenAiSpeechCreateRequest {
             input: text.to_string(),
+            instructions: None,
             model: self.config.tts_model.clone(),
             voice: self.config.tts_voice.clone(),
             response_format: Some(self.config.tts_response_format.clone()),
-            metadata: None,
             speed: None,
+            stream_format: None,
         };
         let cloud = Arc::clone(&self.cloud);
         let raw = tokio::task::block_in_place(|| {

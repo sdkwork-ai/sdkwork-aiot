@@ -1232,9 +1232,12 @@ fn committed_route_manifests_match_http_api_contracts() {
             panic!("missing route manifest {relative_path}: {error}");
         });
         let expected = sdkwork_iot_platform_service::standard_route_manifest_json(surface);
+        // Git checkouts may materialize CRLF depending on the host policy; the
+        // route manifest contract is about content, not line endings.
+        let normalize = |text: &str| text.replace("\r\n", "\n").trim().to_string();
         assert_eq!(
-            committed.trim(),
-            expected.trim(),
+            normalize(&committed),
+            normalize(&expected),
             "route manifest drift detected for {relative_path}; run SDKWORK_EXPORT_ROUTE_MANIFESTS=1 cargo test -p sdkwork-iot-platform-service export_route_manifest_artifacts_when_requested -- --exact"
         );
     }

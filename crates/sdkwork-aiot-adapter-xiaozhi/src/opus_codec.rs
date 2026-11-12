@@ -27,7 +27,7 @@ pub fn samples_per_frame(sample_rate: u32, frame_duration_ms: u32) -> Result<usi
 }
 
 pub fn pcm16le_bytes_to_i16(pcm: &[u8]) -> Result<Vec<i16>, String> {
-    if pcm.len() < 2 || !pcm.len().is_multiple_of(2) {
+    if pcm.len() < 2 || pcm.len() % 2 != 0 {
         return Err("pcm payload must contain 16-bit little-endian samples".to_string());
     }
     Ok(pcm
@@ -94,7 +94,7 @@ pub fn decode_xiaozhi_opus_packet_to_pcm16le(
 }
 
 pub fn wrap_pcm16le_mono_wav(pcm: &[u8], sample_rate: u32) -> Result<Vec<u8>, String> {
-    if pcm.len() < 2 || !pcm.len().is_multiple_of(2) {
+    if pcm.len() < 2 || pcm.len() % 2 != 0 {
         return Err("wav pcm payload must contain 16-bit little-endian samples".to_string());
     }
     let data_size = pcm.len() as u32;

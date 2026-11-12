@@ -38,7 +38,7 @@ describe('aiot-app-core command service', () => {
         commandName: 'speak',
         payload: { lang: 'zh-CN', text: 'hello' },
       },
-      undefined,
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
     );
     expect(command.commandId).toBe('cmd-1');
   });
@@ -182,7 +182,15 @@ describe('aiot-app-core agent service', () => {
       aiotClient: {
         iot: {
           devices: {
-            commands: { create },
+            commands: {
+              create,
+              retrieve: vi.fn().mockResolvedValue({
+                commandId: 'cmd-fallback',
+                deviceId: 'dev-1',
+                result: { resultPayload: { text: 'device fallback reply' } },
+                status: 'completed',
+              }),
+            },
             events: { list },
           },
         },
@@ -210,6 +218,12 @@ describe('aiot-app-core agent service', () => {
                 accepted: true,
                 resourceId: 'cmd-empty',
                 status: 'accepted',
+              }),
+              retrieve: vi.fn().mockResolvedValue({
+                commandId: 'cmd-empty',
+                deviceId: 'dev-1',
+                result: {},
+                status: 'completed',
               }),
             },
             events: {

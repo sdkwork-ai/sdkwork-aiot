@@ -1,0 +1,48 @@
+{
+  "name": "@sdkwork/aiot-pc-console-admin",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "SDKWork AIoT device administration console for PC - device inventory, per-device settings overrides, and revision-safe rollout of device configuration.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sdkwork/aiot-pc-core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@sdkwork/core-pc-react": "workspace:*",
+    "@sdkwork/ui-pc-react": "workspace:*",
+    "lucide-react": ">=1.0.0",
+    "react": ">=18.2.0 <20.0.0",
+    "react-dom": ">=18.2.0 <20.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@sdkwork/core-pc-react": {
+      "optional": true
+    },
+    "@sdkwork/ui-pc-react": {
+      "optional": true
+    }
+  },
+  "sdkwork": {
+    "workspace": "sdkwork-aiot",
+    "product": "sdkwork-aiot",
+    "architecture": "pc-console",
+    "domain": "admin",
+    "capability": "device-settings-admin",
+    "status": "ready"
+  }
+}

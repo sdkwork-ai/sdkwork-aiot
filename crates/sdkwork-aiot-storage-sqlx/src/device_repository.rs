@@ -300,7 +300,7 @@ impl AiotDeviceRepository for SqlxDeviceRepository {
             .run_owned(|pool| async move {
                 match pool.engine() {
                     DeviceDatabaseEngine::Sqlite => {
-                        sqlx::query_scalar::<_, i64>("SELECT 1::bigint")
+                        sqlx::query_scalar::<_, i64>("SELECT 1")
                             .fetch_one(pool.sqlite_pool().expect("sqlite pool"))
                             .await
                     }

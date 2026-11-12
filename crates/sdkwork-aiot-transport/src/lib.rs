@@ -27,6 +27,7 @@ pub enum HttpStatus {
     Forbidden,
     NotFound,
     TooManyRequests,
+    UnprocessableEntity,
     ServiceUnavailable,
     InternalServerError,
 }
@@ -45,6 +46,7 @@ impl HttpStatus {
             Self::Forbidden => 403,
             Self::NotFound => 404,
             Self::TooManyRequests => 429,
+            Self::UnprocessableEntity => 422,
             Self::ServiceUnavailable => 503,
             Self::InternalServerError => 500,
         }
@@ -63,6 +65,7 @@ impl HttpStatus {
             Self::Forbidden => "Forbidden",
             Self::NotFound => "Not Found",
             Self::TooManyRequests => "Too Many Requests",
+            Self::UnprocessableEntity => "Unprocessable Entity",
             Self::ServiceUnavailable => "Service Unavailable",
             Self::InternalServerError => "Internal Server Error",
         }

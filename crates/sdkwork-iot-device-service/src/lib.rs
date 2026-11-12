@@ -2,6 +2,13 @@ use std::collections::BTreeMap;
 
 use sdkwork_aiot_contract::AiotOwnershipRef;
 
+mod settings;
+
+pub use settings::{
+    resolve_device_settings, validate_device_setting_definitions, DeviceSettingDefinition,
+    DeviceSettingKind, DeviceSettingOption, DeviceSettingViolation, DeviceSettingsResolution,
+};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Product {
     pub product_id: String,

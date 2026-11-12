@@ -5,7 +5,7 @@ mod pagination;
 
 pub use api_response::{
     aiot_wire_code_to_result, problem_detail_from_request, problem_detail_from_wire_code,
-    problem_detail_response, resolve_trace_id,
+    problem_detail_response, problem_detail_with_errors, resolve_trace_id,
 };
 
 use api_response::{
@@ -30,9 +30,10 @@ use crate::firmware_rollout_planner::{
 use sdkwork_aiot_contract::{
     AiotRequestContext, IOT_PERMISSION_COMMANDS_CANCEL, IOT_PERMISSION_COMMANDS_EXECUTE,
     IOT_PERMISSION_COMMANDS_READ, IOT_PERMISSION_DEVICES_DELETE, IOT_PERMISSION_DEVICES_READ,
-    IOT_PERMISSION_DEVICES_WRITE, IOT_PERMISSION_FIRMWARE_READ, IOT_PERMISSION_FIRMWARE_ROLLOUT,
-    IOT_PERMISSION_FIRMWARE_WRITE, IOT_PERMISSION_PRODUCTS_READ, IOT_PERMISSION_PRODUCTS_WRITE,
-    IOT_PERMISSION_PROFILES_READ, IOT_PERMISSION_PROFILES_WRITE,
+    IOT_PERMISSION_DEVICES_WRITE, IOT_PERMISSION_DEVICE_SETTINGS_READ,
+    IOT_PERMISSION_DEVICE_SETTINGS_WRITE, IOT_PERMISSION_FIRMWARE_READ,
+    IOT_PERMISSION_FIRMWARE_ROLLOUT, IOT_PERMISSION_FIRMWARE_WRITE, IOT_PERMISSION_PRODUCTS_READ,
+    IOT_PERMISSION_PRODUCTS_WRITE, IOT_PERMISSION_PROFILES_READ, IOT_PERMISSION_PROFILES_WRITE,
     IOT_PERMISSION_PROTOCOL_ADAPTERS_READ, IOT_PERMISSION_RUNTIME_READ,
     IOT_PERMISSION_SESSIONS_DISCONNECT, IOT_PERMISSION_SESSIONS_READ,
     IOT_PERMISSION_TELEMETRY_READ, IOT_PERMISSION_TWINS_READ, IOT_PERMISSION_TWINS_WRITE,
@@ -54,14 +55,33 @@ use sdkwork_aiot_storage::{
     InMemoryAiotEventRepository, OffsetListPageParams,
 };
 use sdkwork_aiot_transport::{build_health_response, HttpRequest, HttpResponse, HttpStatus};
-use sdkwork_iot_device_service::{CapabilityDefinition, CapabilityKind, ProtocolProfile};
-use sdkwork_utils_rust::{base64url_decode, hex_encode, hmac_sha256, secure_compare};
+use sdkwork_iot_device_service::{
+    resolve_device_settings, validate_device_setting_definitions, CapabilityDefinition,
+    CapabilityKind, DeviceSettingDefinition, DeviceSettingKind, DeviceSettingOption,
+    DeviceSettingViolation, DeviceSettingsResolution, ProtocolProfile,
+};
+use sdkwork_utils_rust::{
+    base64url_decode, hex_encode, hmac_sha256, secure_compare, SdkWorkResultCode,
+};
 
 mod admin_stores;
+mod device_hardware_tools;
+mod device_settings;
 mod firmware_rollout_planner;
 mod service_stores;
 
 pub use admin_stores::{AiotCatalogRepositoryHandle, AiotFirmwareRepositoryHandle};
+pub use device_hardware_tools::{
+    AiotDeviceHardwareTool, AiotDeviceHardwareToolCatalog, AiotDeviceHardwareToolError,
+    AiotDeviceHardwareToolSource, EdgeRuntimeHardwareToolSource,
+};
+pub use device_settings::AiotDeviceSettingsRepositoryHandle;
+use device_settings::{
+    changed_override_keys, device_settings_resource_json, history_entry_resource_json,
+    resolve_recorded_settings, settings_definitions_from_json, settings_violations_json,
+    AiotDeviceSettingsChangeAction, AiotDeviceSettingsHistoryEntry, AiotDeviceSettingsRecord,
+    AiotDeviceSettingsRepositoryError,
+};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 pub use service_stores::{
     open_admin_service_stores, open_app_service_stores, AiotAdminServiceStores,
@@ -292,6 +312,9 @@ const PRODUCTION_MIN_SECRET_LENGTH: usize = 32;
 
 /// Refuses to start when production environment enables dev-mode auth bypass, weak secrets,
 /// or ephemeral in-memory device persistence.
+// Startup contract: production misconfiguration terminates the process instead of
+// serving with unsafe defaults.
+#[allow(clippy::exit)]
 pub fn assert_production_environment_safety() {
     if std::env::var("SDKWORK_AIOT_ENVIRONMENT").as_deref() != Ok("production") {
         return;
@@ -1151,6 +1174,55 @@ pub fn standard_api_route_contracts() -> Vec<AiotApiRouteContract> {
         AiotApiRouteContract {
             surface: AiotApiSurface::Admin,
             method: "GET",
+            path: "/backend/v3/api/iot/devices/{deviceId}/settings",
+            operation_id: "devices.settings.retrieve",
+            required_permission: IOT_PERMISSION_DEVICE_SETTINGS_READ,
+        },
+        AiotApiRouteContract {
+            surface: AiotApiSurface::Admin,
+            method: "GET",
+            path: "/backend/v3/api/iot/devices/{deviceId}/hardware_tools",
+            operation_id: "devices.hardwareTools.list",
+            required_permission: IOT_PERMISSION_DEVICES_READ,
+        },
+        AiotApiRouteContract {
+            surface: AiotApiSurface::Admin,
+            method: "PUT",
+            path: "/backend/v3/api/iot/devices/{deviceId}/settings",
+            operation_id: "devices.settings.update",
+            required_permission: IOT_PERMISSION_DEVICE_SETTINGS_WRITE,
+        },
+        AiotApiRouteContract {
+            surface: AiotApiSurface::Admin,
+            method: "DELETE",
+            path: "/backend/v3/api/iot/devices/{deviceId}/settings",
+            operation_id: "devices.settings.delete",
+            required_permission: IOT_PERMISSION_DEVICE_SETTINGS_WRITE,
+        },
+        AiotApiRouteContract {
+            surface: AiotApiSurface::Admin,
+            method: "GET",
+            path: "/backend/v3/api/iot/devices/{deviceId}/settings/history",
+            operation_id: "devices.settings.history.list",
+            required_permission: IOT_PERMISSION_DEVICE_SETTINGS_READ,
+        },
+        AiotApiRouteContract {
+            surface: AiotApiSurface::Admin,
+            method: "POST",
+            path: "/backend/v3/api/iot/devices/{deviceId}/settings/rollback",
+            operation_id: "devices.settings.rollback",
+            required_permission: IOT_PERMISSION_DEVICE_SETTINGS_WRITE,
+        },
+        AiotApiRouteContract {
+            surface: AiotApiSurface::Admin,
+            method: "POST",
+            path: "/backend/v3/api/iot/device_settings/bulk_update",
+            operation_id: "deviceSettings.bulkUpdate",
+            required_permission: IOT_PERMISSION_DEVICE_SETTINGS_WRITE,
+        },
+        AiotApiRouteContract {
+            surface: AiotApiSurface::Admin,
+            method: "GET",
             path: "/backend/v3/api/iot/firmware_artifacts",
             operation_id: "firmwareArtifacts.list",
             required_permission: IOT_PERMISSION_FIRMWARE_READ,
@@ -1370,6 +1442,8 @@ pub struct AiotApiServer {
     credential_repository: Arc<dyn AiotCredentialRepository>,
     firmware_repository: Arc<AiotFirmwareRepositoryHandle>,
     catalog_repository: Arc<AiotCatalogRepositoryHandle>,
+    device_settings_repository: AiotDeviceSettingsRepositoryHandle,
+    device_hardware_tool_source: Arc<dyn AiotDeviceHardwareToolSource>,
 }
 
 impl AiotApiServer {
@@ -1385,6 +1459,8 @@ impl AiotApiServer {
             credential_repository: Arc::new(InMemoryAiotCredentialRepository::new()),
             firmware_repository: Arc::new(AiotFirmwareRepositoryHandle::new_in_memory()),
             catalog_repository: Arc::new(AiotCatalogRepositoryHandle::new_in_memory()),
+            device_settings_repository: AiotDeviceSettingsRepositoryHandle::new_in_memory(),
+            device_hardware_tool_source: Arc::new(EdgeRuntimeHardwareToolSource::from_env()),
         }
     }
 
@@ -1457,6 +1533,22 @@ impl AiotApiServer {
         self
     }
 
+    pub fn with_device_settings_repository(
+        mut self,
+        device_settings_repository: AiotDeviceSettingsRepositoryHandle,
+    ) -> Self {
+        self.device_settings_repository = device_settings_repository;
+        self
+    }
+
+    pub fn with_device_hardware_tool_source(
+        mut self,
+        device_hardware_tool_source: Arc<dyn AiotDeviceHardwareToolSource>,
+    ) -> Self {
+        self.device_hardware_tool_source = device_hardware_tool_source;
+        self
+    }
+
     fn is_ready(&self) -> bool {
         !self.runtime.component_names().is_empty()
             && self.device_repository.storage_ready()
@@ -1479,6 +1571,7 @@ impl AiotApiServer {
                     display_name: record.display_name,
                     version: record.version,
                     capabilities: record.capabilities,
+                    settings: record.settings,
                 },
             );
         }
@@ -1854,7 +1947,14 @@ impl AiotApiServer {
         let association = request_context_to_storage_association(context)?;
         self.device_repository
             .delete_device(&association, device_id)
-            .map_err(device_repository_error_to_response)
+            .map_err(device_repository_error_to_response)?;
+        // Settings are keyed by device id, so a recreated device must not
+        // inherit stale overrides. Cleanup is best-effort: the device deletion
+        // already succeeded and must not be reported as failed.
+        let _ = self
+            .device_settings_repository
+            .delete(&association, device_id);
+        Ok(())
     }
 
     fn create_command(
@@ -2058,6 +2158,289 @@ impl AiotApiServer {
                 .map_err(twin_repository_error_to_response)?;
         }
         Ok(latest)
+    }
+
+    fn read_device_settings(
+        &self,
+        context: &AiotRequestContext,
+        device_id: &str,
+    ) -> Result<AiotDeviceSettingsSnapshot, AiotDeviceSettingsError> {
+        let association = request_context_to_storage_association(context)
+            .map_err(AiotDeviceSettingsError::Context)?;
+        let device = self
+            .device_repository
+            .get_device(&association, device_id)
+            .ok_or_else(|| AiotDeviceSettingsError::DeviceNotFound(device_id.to_string()))?;
+        let product = self
+            .get_product(context, &device.product_id)
+            .map_err(AiotDeviceSettingsError::Context)?;
+        let capability_model = self
+            .get_capability_model(context, &product.default_capability_model_id)
+            .map_err(AiotDeviceSettingsError::Context)?;
+        let record = self.device_settings_repository.get(&association, device_id);
+        let resolution = resolve_recorded_settings(&capability_model.settings, &record).map_err(
+            |violations| AiotDeviceSettingsError::StoredOverridesInvalid {
+                device_settings: violations,
+            },
+        )?;
+        Ok(AiotDeviceSettingsSnapshot {
+            product_id: product.product_id,
+            capability_model_id: capability_model.capability_model_id,
+            definitions: capability_model.settings,
+            record,
+            resolution,
+        })
+    }
+
+    fn replace_device_settings(
+        &self,
+        context: &AiotRequestContext,
+        device_id: &str,
+        payload: AiotDeviceSettingsUpdatePayload,
+    ) -> Result<AiotDeviceSettingsSnapshot, AiotDeviceSettingsError> {
+        self.apply_device_settings(
+            context,
+            device_id,
+            payload.overrides,
+            payload.expected_revision,
+            AiotDeviceSettingsChangeAction::Update,
+        )
+    }
+
+    fn reset_device_settings(
+        &self,
+        context: &AiotRequestContext,
+        device_id: &str,
+    ) -> Result<AiotDeviceSettingsSnapshot, AiotDeviceSettingsError> {
+        self.apply_device_settings(
+            context,
+            device_id,
+            BTreeMap::new(),
+            None,
+            AiotDeviceSettingsChangeAction::Reset,
+        )
+    }
+
+    fn rollback_device_settings(
+        &self,
+        context: &AiotRequestContext,
+        device_id: &str,
+        payload: AiotDeviceSettingsRollbackPayload,
+    ) -> Result<AiotDeviceSettingsSnapshot, AiotDeviceSettingsError> {
+        let association = request_context_to_storage_association(context)
+            .map_err(AiotDeviceSettingsError::Context)?;
+        let Some(target) = self.device_settings_repository.find_history_revision(
+            &association,
+            device_id,
+            payload.target_revision,
+        ) else {
+            return Err(AiotDeviceSettingsError::RevisionNotFound {
+                revision: payload.target_revision,
+            });
+        };
+        self.apply_device_settings(
+            context,
+            device_id,
+            target.overrides,
+            payload.expected_revision,
+            AiotDeviceSettingsChangeAction::Rollback,
+        )
+    }
+
+    fn list_device_settings_history(
+        &self,
+        context: &AiotRequestContext,
+        device_id: &str,
+        params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotDeviceSettingsHistoryEntry>, HttpResponse> {
+        let association = request_context_to_storage_association(context)?;
+        if self
+            .device_repository
+            .get_device(&association, device_id)
+            .is_none()
+        {
+            return Err(device_not_found_response(device_id));
+        }
+        let entries = self
+            .device_settings_repository
+            .list_history(&association, device_id);
+        Ok(paginate_bounded_catalog(entries, params))
+    }
+
+    fn apply_device_settings(
+        &self,
+        context: &AiotRequestContext,
+        device_id: &str,
+        overrides: BTreeMap<String, JsonValue>,
+        expected_revision: Option<i64>,
+        action: AiotDeviceSettingsChangeAction,
+    ) -> Result<AiotDeviceSettingsSnapshot, AiotDeviceSettingsError> {
+        let association = request_context_to_storage_association(context)
+            .map_err(AiotDeviceSettingsError::Context)?;
+        let current = self.read_device_settings(context, device_id)?;
+        let resolution = resolve_device_settings(&current.definitions, &overrides).map_err(
+            |device_settings| AiotDeviceSettingsError::InvalidOverrides { device_settings },
+        )?;
+        let updated_at = current_rfc3339_timestamp();
+        let updated_by = context.user_id.clone();
+        let record = self
+            .device_settings_repository
+            .replace_overrides(
+                &association,
+                device_id,
+                expected_revision,
+                resolution.overrides.clone(),
+                &updated_at,
+                updated_by.as_deref(),
+            )
+            .map_err(AiotDeviceSettingsError::Repository)?;
+        self.publish_device_settings_to_twin(
+            &association,
+            device_id,
+            &resolution,
+            record.revision,
+        )?;
+        let history_entry = AiotDeviceSettingsHistoryEntry {
+            device_id: device_id.to_string(),
+            revision: record.revision,
+            overrides: resolution.overrides.clone(),
+            changed_keys: changed_override_keys(&current.record.overrides, &resolution.overrides),
+            action,
+            updated_at: updated_at.clone(),
+            updated_by: updated_by.clone(),
+        };
+        // Audit is best-effort: the settings write already succeeded, so a
+        // history persistence failure must not turn the operator's save into an
+        // error.
+        let _ = self
+            .device_settings_repository
+            .append_history(&association, &history_entry);
+        Ok(AiotDeviceSettingsSnapshot {
+            record,
+            resolution,
+            ..current
+        })
+    }
+
+    fn bulk_update_device_settings(
+        &self,
+        context: &AiotRequestContext,
+        payload: AiotDeviceSettingsBulkUpdatePayload,
+    ) -> Result<Vec<AiotDeviceSettingsBulkItemOutcome>, HttpResponse> {
+        // The association is request scoped; fail fast when the request context
+        // itself is invalid instead of reporting every item as failed.
+        request_context_to_storage_association(context)?;
+
+        let mut validation_failures = Vec::with_capacity(payload.items.len());
+        for item in &payload.items {
+            validation_failures.push(
+                self.validate_device_settings_item(context, item)
+                    .err()
+                    .map(|error| settings_error_to_bulk_outcome(&item.device_id, error)),
+            );
+        }
+        let has_failures = validation_failures.iter().any(Option::is_some);
+        if payload.all_or_nothing && has_failures {
+            return Ok(payload
+                .items
+                .iter()
+                .zip(validation_failures)
+                .map(|(item, failure)| {
+                    failure.unwrap_or_else(|| AiotDeviceSettingsBulkItemOutcome {
+                        device_id: item.device_id.clone(),
+                        status: "skipped",
+                        revision: None,
+                        device_settings: Vec::new(),
+                    })
+                })
+                .collect());
+        }
+
+        let mut outcomes = Vec::with_capacity(payload.items.len());
+        for (item, failure) in payload.items.iter().zip(validation_failures) {
+            if let Some(failure) = failure {
+                outcomes.push(failure);
+                continue;
+            }
+            match self.apply_device_settings(
+                context,
+                &item.device_id,
+                item.overrides.clone(),
+                item.expected_revision,
+                AiotDeviceSettingsChangeAction::Update,
+            ) {
+                Ok(snapshot) => outcomes.push(AiotDeviceSettingsBulkItemOutcome {
+                    device_id: item.device_id.clone(),
+                    status: "updated",
+                    revision: Some(snapshot.record.revision),
+                    device_settings: Vec::new(),
+                }),
+                Err(error) => {
+                    outcomes.push(settings_error_to_bulk_outcome(&item.device_id, error));
+                }
+            }
+        }
+        Ok(outcomes)
+    }
+
+    fn validate_device_settings_item(
+        &self,
+        context: &AiotRequestContext,
+        item: &AiotDeviceSettingsBulkItemRequest,
+    ) -> Result<(), AiotDeviceSettingsError> {
+        let current = self.read_device_settings(context, &item.device_id)?;
+        if let Some(expected) = item.expected_revision {
+            if expected != current.record.revision {
+                return Err(AiotDeviceSettingsError::Repository(
+                    AiotDeviceSettingsRepositoryError::RevisionConflict {
+                        expected,
+                        actual: current.record.revision,
+                    },
+                ));
+            }
+        }
+        resolve_device_settings(&current.definitions, &item.overrides).map_err(
+            |device_settings| AiotDeviceSettingsError::InvalidOverrides { device_settings },
+        )?;
+        Ok(())
+    }
+
+    fn publish_device_settings_to_twin(
+        &self,
+        association: &AiotStorageAssociation,
+        device_id: &str,
+        resolution: &DeviceSettingsResolution,
+        revision: i64,
+    ) -> Result<(), AiotDeviceSettingsError> {
+        let effective_json = serde_json::to_string(&serde_json::Value::Object(
+            resolution.effective.clone().into_iter().collect(),
+        ))
+        .unwrap_or_else(|_| "{}".to_string());
+        self.twin_repository
+            .upsert_twin_property(
+                AiotTwinPropertyUpsertCommand::new(association.clone(), device_id, "settings")
+                    .with_desired_value_json(effective_json),
+            )
+            .map_err(|_| {
+                AiotDeviceSettingsError::Repository(
+                    AiotDeviceSettingsRepositoryError::StorageFailure,
+                )
+            })?;
+        self.twin_repository
+            .upsert_twin_property(
+                AiotTwinPropertyUpsertCommand::new(
+                    association.clone(),
+                    device_id,
+                    "settingsRevision",
+                )
+                .with_desired_value_json(JsonValue::String(revision.to_string()).to_string()),
+            )
+            .map_err(|_| {
+                AiotDeviceSettingsError::Repository(
+                    AiotDeviceSettingsRepositoryError::StorageFailure,
+                )
+            })?;
+        Ok(())
     }
 
     fn list_device_credentials(
@@ -3205,6 +3588,170 @@ pub fn handle_resolved_api_request(
                 Err(problem) => problem,
             }
         }
+        (AiotApiSurface::Admin, "devices.hardwareTools.list") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let device_id = device_id.as_deref().unwrap_or("unknown-device");
+            let association = match request_context_to_storage_association(context) {
+                Ok(association) => association,
+                Err(_) => {
+                    return problem_detail_from_request(
+                        request,
+                        "api.context.invalid_tenant_id",
+                        "Resolved tenant context is required",
+                    );
+                }
+            };
+            if server
+                .device_repository
+                .get_device(&association, device_id)
+                .is_none()
+            {
+                return problem_detail_from_request(
+                    request,
+                    "api.device.not_found",
+                    format!("Device {device_id} was not found"),
+                );
+            }
+            match server
+                .device_hardware_tool_source
+                .list_hardware_tools(device_id)
+            {
+                Ok(catalog) => {
+                    standard_resource_response(request, HttpStatus::Ok, catalog.resource_json())
+                }
+                Err(AiotDeviceHardwareToolError::Unavailable(detail)) => {
+                    problem_detail_from_request(
+                        request,
+                        "api.device.hardware_tools.unavailable",
+                        detail,
+                    )
+                }
+                Err(AiotDeviceHardwareToolError::InvalidResponse(detail)) => {
+                    problem_detail_from_request(
+                        request,
+                        "api.device.hardware_tools.invalid_response",
+                        detail,
+                    )
+                }
+            }
+        }
+        (AiotApiSurface::Admin, "devices.settings.retrieve") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let device_id = device_id.as_deref().unwrap_or("unknown-device");
+            match server.read_device_settings(context, device_id) {
+                Ok(snapshot) => {
+                    standard_device_settings_response(request, HttpStatus::Ok, device_id, &snapshot)
+                }
+                Err(error) => device_settings_error_response(request, error),
+            }
+        }
+        (AiotApiSurface::Admin, "devices.settings.update") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let device_id = device_id.as_deref().unwrap_or("unknown-device");
+            let payload = match device_settings_update_payload_from_request(request) {
+                Ok(payload) => payload,
+                Err(problem) => return problem,
+            };
+            match server.replace_device_settings(context, device_id, payload) {
+                Ok(snapshot) => {
+                    standard_device_settings_response(request, HttpStatus::Ok, device_id, &snapshot)
+                }
+                Err(error) => device_settings_error_response(request, error),
+            }
+        }
+        (AiotApiSurface::Admin, "devices.settings.delete") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let device_id = device_id.as_deref().unwrap_or("unknown-device");
+            match server.reset_device_settings(context, device_id) {
+                Ok(_) => HttpResponse::new(HttpStatus::NoContent),
+                Err(error) => device_settings_error_response(request, error),
+            }
+        }
+        (AiotApiSurface::Admin, "devices.settings.history.list") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let device_id = device_id.as_deref().unwrap_or("unknown-device");
+            let page_params = match require_page_params(request) {
+                Ok(params) => params,
+                Err(response) => return response,
+            };
+            match server.list_device_settings_history(context, device_id, page_params) {
+                Ok(page) => standard_device_settings_history_response(
+                    request,
+                    &page.items,
+                    page_params,
+                    page.total,
+                ),
+                Err(problem) => problem,
+            }
+        }
+        (AiotApiSurface::Admin, "devices.settings.rollback") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let device_id = device_id.as_deref().unwrap_or("unknown-device");
+            let payload = match device_settings_rollback_payload_from_request(request) {
+                Ok(payload) => payload,
+                Err(problem) => return problem,
+            };
+            match server.rollback_device_settings(context, device_id, payload) {
+                Ok(snapshot) => {
+                    standard_device_settings_response(request, HttpStatus::Ok, device_id, &snapshot)
+                }
+                Err(error) => device_settings_error_response(request, error),
+            }
+        }
+        (AiotApiSurface::Admin, "deviceSettings.bulkUpdate") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let payload = match device_settings_bulk_update_payload_from_request(request) {
+                Ok(payload) => payload,
+                Err(problem) => return problem,
+            };
+            let all_or_nothing = payload.all_or_nothing;
+            match server.bulk_update_device_settings(context, payload) {
+                Ok(outcomes) => bulk_device_settings_response(request, &outcomes, all_or_nothing),
+                Err(problem) => problem,
+            }
+        }
         (AiotApiSurface::Admin, "devices.credentials.list") => {
             let Some(context) = request_context else {
                 return problem_response(
@@ -3999,6 +4546,101 @@ fn standard_protocol_profile_records() -> Vec<AiotProtocolProfileRecord> {
     records
 }
 
+fn standard_xiaozhi_settings() -> Vec<DeviceSettingDefinition> {
+    vec![
+        DeviceSettingDefinition::new("assistant.wakeWord", DeviceSettingKind::Enum)
+            .with_display_name("Wake word")
+            .with_description("Phrase that starts an assistant turn on the device microphone.")
+            .with_group("assistant")
+            .with_default(JsonValue::String("你好小智".to_string()))
+            .with_option(DeviceSettingOption::new("你好小智").with_label("默认唤醒词"))
+            .with_option(DeviceSettingOption::new("小智小智").with_label("备用唤醒词")),
+        DeviceSettingDefinition::new("assistant.language", DeviceSettingKind::Enum)
+            .with_display_name("Conversation language")
+            .with_group("assistant")
+            .with_default(JsonValue::String("zh-CN".to_string()))
+            .with_option(DeviceSettingOption::new("zh-CN").with_label("简体中文"))
+            .with_option(DeviceSettingOption::new("en-US").with_label("English"))
+            .with_option(DeviceSettingOption::new("ja-JP").with_label("日本語")),
+        DeviceSettingDefinition::new("assistant.instructions", DeviceSettingKind::String)
+            .with_display_name("Custom instructions")
+            .with_description(
+                "Extra operator instructions appended to the assistant system prompt.",
+            )
+            .with_group("assistant")
+            .with_max_length(500)
+            .with_default(JsonValue::String(String::new())),
+        DeviceSettingDefinition::new("audio.volume", DeviceSettingKind::Integer)
+            .with_display_name("Playback volume")
+            .with_group("audio")
+            .with_unit("%")
+            .with_range(0.0, 100.0)
+            .with_default(JsonValue::from(60)),
+        DeviceSettingDefinition::new("audio.playbackSpeed", DeviceSettingKind::Number)
+            .with_display_name("Playback speed")
+            .with_group("audio")
+            .with_unit("x")
+            .with_range(0.5, 2.0)
+            .with_default(JsonValue::from(1.0)),
+        DeviceSettingDefinition::new("display.brightness", DeviceSettingKind::Integer)
+            .with_display_name("Screen brightness")
+            .with_group("display")
+            .with_unit("%")
+            .with_range(0.0, 100.0)
+            .with_default(JsonValue::from(80)),
+        DeviceSettingDefinition::new("system.autoSleepSeconds", DeviceSettingKind::Integer)
+            .with_display_name("Idle sleep delay")
+            .with_group("system")
+            .with_unit("seconds")
+            .with_range(60.0, 3600.0)
+            .with_default(JsonValue::from(300)),
+        DeviceSettingDefinition::new("network.heartbeatSeconds", DeviceSettingKind::Integer)
+            .with_display_name("Heartbeat interval")
+            .with_group("network")
+            .with_unit("seconds")
+            .with_range(15.0, 300.0)
+            .with_default(JsonValue::from(30)),
+        DeviceSettingDefinition::new("security.allowRemoteReboot", DeviceSettingKind::Boolean)
+            .with_display_name("Allow remote reboot")
+            .with_description("Permit operator-triggered reboots for this device.")
+            .with_group("security")
+            .with_default(JsonValue::Bool(true)),
+    ]
+}
+
+fn standard_edge_gateway_settings() -> Vec<DeviceSettingDefinition> {
+    vec![
+        DeviceSettingDefinition::new("gateway.reportIntervalSeconds", DeviceSettingKind::Integer)
+            .with_display_name("Telemetry report interval")
+            .with_group("gateway")
+            .with_unit("seconds")
+            .with_range(5.0, 3600.0)
+            .with_default(JsonValue::from(30)),
+        DeviceSettingDefinition::new("gateway.childAutoRegister", DeviceSettingKind::Boolean)
+            .with_display_name("Auto-register child devices")
+            .with_group("gateway")
+            .with_default(JsonValue::Bool(true)),
+        DeviceSettingDefinition::new("gateway.mqttQos", DeviceSettingKind::Enum)
+            .with_display_name("MQTT delivery QoS")
+            .with_group("gateway")
+            .with_default(JsonValue::String("1".to_string()))
+            .with_option(DeviceSettingOption::new("0").with_label("At most once"))
+            .with_option(DeviceSettingOption::new("1").with_label("At least once"))
+            .with_option(DeviceSettingOption::new("2").with_label("Exactly once")),
+        DeviceSettingDefinition::new("gateway.cacheLimitMb", DeviceSettingKind::Integer)
+            .with_display_name("Local cache limit")
+            .with_group("gateway")
+            .with_unit("MB")
+            .with_range(64.0, 8192.0)
+            .with_default(JsonValue::from(512)),
+        DeviceSettingDefinition::new("security.requireMtls", DeviceSettingKind::Boolean)
+            .with_display_name("Require mutual TLS")
+            .with_group("security")
+            .with_default(JsonValue::Bool(true))
+            .read_only(),
+    ]
+}
+
 fn standard_capability_models() -> Vec<AiotCapabilityModel> {
     vec![
         AiotCapabilityModel {
@@ -4026,6 +4668,7 @@ fn standard_capability_models() -> Vec<AiotCapabilityModel> {
                     .with_command("chat")
                     .with_event("chatCompleted"),
             ],
+            settings: standard_xiaozhi_settings(),
         },
         AiotCapabilityModel {
             capability_model_id: "capmodel-edge-gateway".to_string(),
@@ -4041,6 +4684,7 @@ fn standard_capability_models() -> Vec<AiotCapabilityModel> {
                     .with_event("reportedChanged")
                     .with_protocol_mapping("mqtt.v5", "devices/{deviceId}/shadow"),
             ],
+            settings: standard_edge_gateway_settings(),
         },
     ]
 }
@@ -4053,6 +4697,7 @@ fn standard_capability_model_records() -> Vec<AiotCapabilityModelRecord> {
             display_name: model.display_name,
             version: model.version,
             capabilities: model.capabilities,
+            settings: model.settings,
             status: "active".to_string(),
         })
         .collect()
@@ -4192,12 +4837,14 @@ fn capability_model_resource_json(model: &AiotCapabilityModelRecord) -> String {
         .map(capability_definition_resource_json)
         .collect::<Vec<_>>()
         .join(",");
+    let settings = device_settings::settings_definitions_json(&model.settings);
     format!(
-        r#"{{"capabilityModelId":"{}","displayName":"{}","version":"{}","capabilities":[{}],"status":"{}"}}"#,
+        r#"{{"capabilityModelId":"{}","displayName":"{}","version":"{}","capabilities":[{}],"settings":{},"status":"{}"}}"#,
         json_escape(&model.capability_model_id),
         json_escape(&model.display_name),
         json_escape(&model.version),
         capabilities,
+        settings,
         json_escape(&model.status),
     )
 }
@@ -4272,12 +4919,13 @@ struct AiotDeviceCredentialRecord {
     issued_secret: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 struct AiotCapabilityModel {
     capability_model_id: String,
     display_name: String,
     version: String,
     capabilities: Vec<CapabilityDefinition>,
+    settings: Vec<DeviceSettingDefinition>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -4313,12 +4961,13 @@ struct AiotProtocolProfileRecord {
     status: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 struct AiotCapabilityModelRecord {
     capability_model_id: String,
     display_name: String,
     version: String,
     capabilities: Vec<CapabilityDefinition>,
+    settings: Vec<DeviceSettingDefinition>,
     status: String,
 }
 
@@ -4401,6 +5050,7 @@ struct AiotCapabilityModelCreatePayload {
     display_name: String,
     version: String,
     capabilities: Vec<CapabilityDefinition>,
+    settings: Vec<DeviceSettingDefinition>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -4408,6 +5058,7 @@ struct AiotCapabilityModelUpdatePayload {
     display_name: Option<String>,
     version: Option<String>,
     capabilities: Option<Vec<CapabilityDefinition>>,
+    settings: Option<Vec<DeviceSettingDefinition>>,
     status: Option<String>,
 }
 
@@ -5193,6 +5844,7 @@ impl InMemoryAiotCatalogRepository {
             display_name: payload.display_name,
             version: payload.version,
             capabilities: payload.capabilities,
+            settings: payload.settings,
             status: "active".to_string(),
         };
         state.capability_models.insert(key, record.clone());
@@ -5255,6 +5907,9 @@ impl InMemoryAiotCatalogRepository {
         }
         if let Some(capabilities) = payload.capabilities {
             record.capabilities = capabilities;
+        }
+        if let Some(settings) = payload.settings {
+            record.settings = settings;
         }
         if let Some(status) = payload.status {
             record.status = status;
@@ -5353,6 +6008,64 @@ struct AiotDeviceUpdatePayload {
     display_name: Option<String>,
     status: Option<String>,
     metadata_json: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct AiotDeviceSettingsUpdatePayload {
+    expected_revision: Option<i64>,
+    overrides: BTreeMap<String, JsonValue>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct AiotDeviceSettingsRollbackPayload {
+    expected_revision: Option<i64>,
+    target_revision: i64,
+}
+
+#[derive(Debug, Clone)]
+struct AiotDeviceSettingsBulkItemRequest {
+    device_id: String,
+    expected_revision: Option<i64>,
+    overrides: BTreeMap<String, JsonValue>,
+}
+
+#[derive(Debug, Clone)]
+struct AiotDeviceSettingsBulkUpdatePayload {
+    all_or_nothing: bool,
+    items: Vec<AiotDeviceSettingsBulkItemRequest>,
+}
+
+#[derive(Debug, Clone)]
+struct AiotDeviceSettingsBulkItemOutcome {
+    device_id: String,
+    status: &'static str,
+    revision: Option<i64>,
+    device_settings: Vec<DeviceSettingViolation>,
+}
+
+#[derive(Debug, Clone)]
+struct AiotDeviceSettingsSnapshot {
+    product_id: String,
+    capability_model_id: String,
+    definitions: Vec<DeviceSettingDefinition>,
+    record: AiotDeviceSettingsRecord,
+    resolution: DeviceSettingsResolution,
+}
+
+#[derive(Debug, Clone)]
+enum AiotDeviceSettingsError {
+    Context(HttpResponse),
+    DeviceNotFound(String),
+    RevisionNotFound {
+        revision: i64,
+    },
+    InvalidOverrides {
+        device_settings: Vec<DeviceSettingViolation>,
+    },
+    StoredOverridesInvalid {
+        device_settings: Vec<DeviceSettingViolation>,
+    },
+    Repository(AiotDeviceSettingsRepositoryError),
 }
 
 fn required_json_object_body(
@@ -5507,6 +6220,7 @@ fn capability_model_create_payload_from_request(
         version: required_json_string_field(&obj, "version")?,
         capabilities: optional_json_capability_definitions_field(&obj, "capabilities")?
             .unwrap_or_default(),
+        settings: capability_model_settings_field(request, &obj)?.unwrap_or_default(),
     })
 }
 
@@ -5518,6 +6232,7 @@ fn capability_model_update_payload_from_request(
         display_name: optional_json_string_field(&obj, "displayName"),
         version: optional_json_string_field(&obj, "version"),
         capabilities: optional_json_capability_definitions_field(&obj, "capabilities")?,
+        settings: capability_model_settings_field(request, &obj)?,
         status: optional_json_string_field(&obj, "status"),
     })
 }
@@ -5875,6 +6590,398 @@ fn twin_update_payload_from_request(
     Ok(AiotTwinUpdatePayload { desired, reported })
 }
 
+fn optional_json_int64_field(
+    request: &HttpRequest,
+    obj: &JsonMap<String, JsonValue>,
+    field: &str,
+) -> Result<Option<i64>, HttpResponse> {
+    match obj.get(field) {
+        None | Some(JsonValue::Null) => Ok(None),
+        Some(JsonValue::String(value)) if is_valid_int64_string(value) => value
+            .parse::<i64>()
+            .map(Some)
+            .map_err(|_| settings_field_problem(request, field, "must be an int64 decimal string")),
+        Some(JsonValue::Number(number)) => number.as_i64().map(Some).ok_or_else(|| {
+            settings_field_problem(request, field, "must be an int64 decimal string")
+        }),
+        Some(_) => Err(settings_field_problem(
+            request,
+            field,
+            "must be an int64 decimal string",
+        )),
+    }
+}
+
+fn device_settings_rollback_payload_from_request(
+    request: &HttpRequest,
+) -> Result<AiotDeviceSettingsRollbackPayload, HttpResponse> {
+    let obj = required_json_object_body(request)?;
+    let target_revision =
+        optional_json_int64_field(request, &obj, "targetRevision")?.ok_or_else(|| {
+            settings_field_problem(
+                request,
+                "targetRevision",
+                "Field targetRevision is required",
+            )
+        })?;
+    Ok(AiotDeviceSettingsRollbackPayload {
+        expected_revision: optional_json_int64_field(request, &obj, "expectedRevision")?,
+        target_revision,
+    })
+}
+
+fn device_settings_bulk_update_payload_from_request(
+    request: &HttpRequest,
+) -> Result<AiotDeviceSettingsBulkUpdatePayload, HttpResponse> {
+    let obj = required_json_object_body(request)?;
+    let Some(items_value) = obj.get("items") else {
+        return Err(problem_response(
+            HttpStatus::BadRequest,
+            "api.request.body.required",
+            "Field items is required",
+        ));
+    };
+    let Some(items) = items_value.as_array() else {
+        return Err(settings_field_problem(
+            request,
+            "items",
+            "Field items must be an array",
+        ));
+    };
+    if items.is_empty() {
+        return Err(settings_field_problem(
+            request,
+            "items",
+            "At least one item is required",
+        ));
+    }
+    if items.len() > 100 {
+        return Err(settings_field_problem(
+            request,
+            "items",
+            "At most 100 items are allowed per bulk request",
+        ));
+    }
+
+    let mut parsed_items = Vec::with_capacity(items.len());
+    let mut seen_device_ids = BTreeMap::<&str, ()>::new();
+    for (index, item) in items.iter().enumerate() {
+        let Some(item_object) = item.as_object() else {
+            return Err(settings_field_problem(
+                request,
+                "items",
+                &format!("items[{index}] must be an object"),
+            ));
+        };
+        let device_id = item_object
+            .get("deviceId")
+            .and_then(JsonValue::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                settings_field_problem(
+                    request,
+                    "items",
+                    &format!("items[{index}].deviceId is required"),
+                )
+            })?;
+        if seen_device_ids.insert(device_id, ()).is_some() {
+            return Err(settings_field_problem(
+                request,
+                "items",
+                &format!("items[{index}].deviceId is duplicated"),
+            ));
+        }
+        let Some(overrides_value) = item_object.get("overrides") else {
+            return Err(settings_field_problem(
+                request,
+                "items",
+                &format!("items[{index}].overrides is required"),
+            ));
+        };
+        let Some(overrides_object) = overrides_value.as_object() else {
+            return Err(settings_field_problem(
+                request,
+                "items",
+                &format!("items[{index}].overrides must be an object"),
+            ));
+        };
+        parsed_items.push(AiotDeviceSettingsBulkItemRequest {
+            device_id: device_id.to_string(),
+            expected_revision: optional_json_int64_field(request, item_object, "expectedRevision")?,
+            overrides: overrides_object
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+        });
+    }
+
+    Ok(AiotDeviceSettingsBulkUpdatePayload {
+        all_or_nothing: obj
+            .get("allOrNothing")
+            .and_then(JsonValue::as_bool)
+            .unwrap_or(false),
+        items: parsed_items,
+    })
+}
+
+fn device_settings_update_payload_from_request(
+    request: &HttpRequest,
+) -> Result<AiotDeviceSettingsUpdatePayload, HttpResponse> {
+    if request.body.iter().all(|byte| byte.is_ascii_whitespace()) {
+        return Err(problem_response(
+            HttpStatus::BadRequest,
+            "api.request.body.required",
+            "Request body is required",
+        ));
+    }
+
+    let body: JsonValue = serde_json::from_slice(&request.body).map_err(|_| {
+        problem_response(
+            HttpStatus::BadRequest,
+            "api.request.invalid_json",
+            "Request body must be valid JSON",
+        )
+    })?;
+    let obj = body.as_object().ok_or_else(|| {
+        problem_response(
+            HttpStatus::BadRequest,
+            "api.request.invalid_json_object",
+            "Request body must be a JSON object",
+        )
+    })?;
+
+    let Some(overrides_value) = obj.get("overrides") else {
+        return Err(problem_response(
+            HttpStatus::BadRequest,
+            "api.request.body.required",
+            "Field overrides is required",
+        ));
+    };
+    let Some(overrides_object) = overrides_value.as_object() else {
+        return Err(settings_field_problem(
+            request,
+            "overrides",
+            "Field overrides must be a JSON object",
+        ));
+    };
+    let overrides = overrides_object
+        .iter()
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect::<BTreeMap<_, _>>();
+
+    let expected_revision = match obj.get("expectedRevision") {
+        None | Some(JsonValue::Null) => None,
+        Some(JsonValue::String(value)) => Some(value.parse::<i64>().map_err(|_| {
+            settings_field_problem(
+                request,
+                "expectedRevision",
+                "Field expectedRevision must be an int64 decimal string",
+            )
+        })?),
+        Some(JsonValue::Number(number)) => Some(number.as_i64().ok_or_else(|| {
+            settings_field_problem(
+                request,
+                "expectedRevision",
+                "Field expectedRevision must be an int64 decimal string",
+            )
+        })?),
+        Some(_) => {
+            return Err(settings_field_problem(
+                request,
+                "expectedRevision",
+                "Field expectedRevision must be an int64 decimal string",
+            ));
+        }
+    };
+
+    Ok(AiotDeviceSettingsUpdatePayload {
+        expected_revision,
+        overrides,
+    })
+}
+
+fn settings_error_to_bulk_outcome(
+    device_id: &str,
+    error: AiotDeviceSettingsError,
+) -> AiotDeviceSettingsBulkItemOutcome {
+    match error {
+        AiotDeviceSettingsError::DeviceNotFound(_) => AiotDeviceSettingsBulkItemOutcome {
+            device_id: device_id.to_string(),
+            status: "not_found",
+            revision: None,
+            device_settings: Vec::new(),
+        },
+        AiotDeviceSettingsError::InvalidOverrides { device_settings }
+        | AiotDeviceSettingsError::StoredOverridesInvalid { device_settings } => {
+            AiotDeviceSettingsBulkItemOutcome {
+                device_id: device_id.to_string(),
+                status: "invalid",
+                revision: None,
+                device_settings,
+            }
+        }
+        AiotDeviceSettingsError::Repository(
+            AiotDeviceSettingsRepositoryError::RevisionConflict { .. },
+        ) => AiotDeviceSettingsBulkItemOutcome {
+            device_id: device_id.to_string(),
+            status: "conflict",
+            revision: None,
+            device_settings: Vec::new(),
+        },
+        AiotDeviceSettingsError::Context(_)
+        | AiotDeviceSettingsError::RevisionNotFound { .. }
+        | AiotDeviceSettingsError::Repository(_) => AiotDeviceSettingsBulkItemOutcome {
+            device_id: device_id.to_string(),
+            status: "failed",
+            revision: None,
+            device_settings: Vec::new(),
+        },
+    }
+}
+
+fn device_settings_error_response(
+    request: &HttpRequest,
+    error: AiotDeviceSettingsError,
+) -> HttpResponse {
+    match error {
+        AiotDeviceSettingsError::Context(response) => response,
+        AiotDeviceSettingsError::DeviceNotFound(device_id) => {
+            device_not_found_response(&device_id)
+        }
+        AiotDeviceSettingsError::RevisionNotFound { revision } => problem_detail_with_errors(
+            request,
+            HttpStatus::NotFound,
+            SdkWorkResultCode::NotFound,
+            format!("Device settings revision {revision} was not found"),
+            &serde_json::json!([
+                {
+                    "field": "targetRevision",
+                    "message": format!("revision {revision} is not recorded for this device"),
+                    "code": 40011,
+                }
+            ]),
+        ),
+        AiotDeviceSettingsError::InvalidOverrides { device_settings } => {
+            problem_detail_with_errors(
+                request,
+                HttpStatus::UnprocessableEntity,
+                SdkWorkResultCode::ValidationError,
+                "One or more device settings values are invalid",
+                &settings_violations_json(&device_settings),
+            )
+        }
+        AiotDeviceSettingsError::StoredOverridesInvalid { device_settings } => {
+            problem_detail_with_errors(
+                request,
+                HttpStatus::Conflict,
+                SdkWorkResultCode::Conflict,
+                "Stored device settings no longer match the capability model schema; review or reset the overrides",
+                &settings_violations_json(&device_settings),
+            )
+        }
+        AiotDeviceSettingsError::Repository(error) => match error {
+            AiotDeviceSettingsRepositoryError::RevisionConflict { expected, actual } => {
+                problem_detail_with_errors(
+                    request,
+                    HttpStatus::Conflict,
+                    SdkWorkResultCode::Conflict,
+                    format!(
+                        "expectedRevision {expected} does not match the current revision {actual}"
+                    ),
+                    &serde_json::json!([
+                        {
+                            "field": "expectedRevision",
+                            "message": format!("current revision is {actual}"),
+                            "code": 40011,
+                        }
+                    ]),
+                )
+            }
+            AiotDeviceSettingsRepositoryError::StorageFailure => problem_detail_response(
+                &resolve_trace_id(request),
+                SdkWorkResultCode::InternalError,
+                "Device settings storage is unavailable",
+            ),
+        },
+    }
+}
+
+fn standard_device_settings_response(
+    request: &HttpRequest,
+    status: HttpStatus,
+    device_id: &str,
+    snapshot: &AiotDeviceSettingsSnapshot,
+) -> HttpResponse {
+    standard_resource_response(
+        request,
+        status,
+        device_settings_resource_json(
+            device_id,
+            &snapshot.product_id,
+            &snapshot.capability_model_id,
+            &snapshot.definitions,
+            &snapshot.record,
+            &snapshot.resolution,
+        ),
+    )
+}
+
+fn standard_device_settings_history_response(
+    request: &HttpRequest,
+    entries: &[AiotDeviceSettingsHistoryEntry],
+    page_query: PageQuery,
+    total: i64,
+) -> HttpResponse {
+    let items = entries
+        .iter()
+        .map(history_entry_resource_json)
+        .collect::<Vec<_>>()
+        .join(",");
+    json_collection_response(request, &items, page_query, total)
+}
+
+fn bulk_device_settings_response(
+    request: &HttpRequest,
+    outcomes: &[AiotDeviceSettingsBulkItemOutcome],
+    all_or_nothing: bool,
+) -> HttpResponse {
+    let items = outcomes
+        .iter()
+        .map(|outcome| {
+            let mut object = JsonMap::new();
+            object.insert(
+                "deviceId".to_string(),
+                JsonValue::String(outcome.device_id.clone()),
+            );
+            object.insert(
+                "status".to_string(),
+                JsonValue::String(outcome.status.to_string()),
+            );
+            if let Some(revision) = outcome.revision {
+                object.insert(
+                    "revision".to_string(),
+                    JsonValue::String(revision.to_string()),
+                );
+            }
+            if !outcome.device_settings.is_empty() {
+                object.insert(
+                    "errors".to_string(),
+                    settings_violations_json(&outcome.device_settings),
+                );
+            }
+            JsonValue::Object(object).to_string()
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let trace_id = resolve_trace_id(request);
+    let body = format!(
+        r#"{{"code":0,"data":{{"items":[{items}],"allOrNothing":{all_or_nothing}}},"traceId":"{}"}}"#,
+        json_escape(&trace_id)
+    );
+    api_response::success_json_response(HttpStatus::Ok, body, &trace_id)
+}
+
 fn parse_twin_update_section(
     obj: &JsonMap<String, JsonValue>,
     field: &str,
@@ -6015,6 +7122,49 @@ fn optional_json_capability_definitions_field(
         definitions.push(capability_definition_from_json(value)?);
     }
     Ok(Some(definitions))
+}
+
+fn capability_model_settings_field(
+    request: &HttpRequest,
+    obj: &JsonMap<String, JsonValue>,
+) -> Result<Option<Vec<DeviceSettingDefinition>>, HttpResponse> {
+    if !obj.contains_key("settings") {
+        return Ok(None);
+    }
+    let definitions = settings_definitions_from_json(obj.get("settings"))
+        .map_err(|message| settings_field_problem(request, "settings", &message))?;
+    validate_device_setting_definitions(&definitions)
+        .map_err(|violations| settings_schema_problem(request, &violations))?;
+    Ok(Some(definitions))
+}
+
+fn settings_field_problem(request: &HttpRequest, field: &str, message: &str) -> HttpResponse {
+    problem_detail_with_errors(
+        request,
+        HttpStatus::UnprocessableEntity,
+        SdkWorkResultCode::ValidationError,
+        "Device settings payload is invalid",
+        &serde_json::json!([
+            {
+                "field": field,
+                "message": message,
+                "code": 40011,
+            }
+        ]),
+    )
+}
+
+fn settings_schema_problem(
+    request: &HttpRequest,
+    violations: &[sdkwork_iot_device_service::DeviceSettingViolation],
+) -> HttpResponse {
+    problem_detail_with_errors(
+        request,
+        HttpStatus::UnprocessableEntity,
+        SdkWorkResultCode::ValidationError,
+        "Device settings schema is invalid",
+        &settings_violations_json(violations),
+    )
 }
 
 fn capability_definition_from_json(

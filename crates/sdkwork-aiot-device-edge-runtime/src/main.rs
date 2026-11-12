@@ -34,6 +34,7 @@ const BRIDGE_SESSIONS_PATH_PREFIX: &str = "/internal/bridge/sessions/";
 const MCP_POLICY_STATS_PATH: &str = "/internal/xiaozhi/mcp-policy/stats";
 const ACTIVATION_REGISTRY_STATS_PATH: &str = "/internal/xiaozhi/activation-registry/stats";
 const ACTIVATION_REGISTRY_METRICS_PATH: &str = "/internal/xiaozhi/activation-registry/metrics";
+const MCP_TOOLS_PATH: &str = "/internal/xiaozhi/mcp_tools";
 
 fn main() {
     sdkwork_database_sqlx::enable_process_shared_database_pool();
@@ -1090,6 +1091,12 @@ fn handle_client_connection(
             let _ = stream.write_all(response.as_bytes());
             return;
         }
+        if request.method == "GET" && request.path == MCP_TOOLS_PATH {
+            let response = xiaozhi_mcp_tools_response(&request);
+            let response = format_response(&response);
+            let _ = stream.write_all(response.as_bytes());
+            return;
+        }
 
         if is_websocket_upgrade(&request)
             && request.path == sdkwork_aiot_adapter_xiaozhi::XIAOZHI_WS_PATH
@@ -1460,6 +1467,32 @@ fn mcp_policy_stats_response(
     sdkwork_aiot_transport::HttpResponse::new(sdkwork_aiot_transport::HttpStatus::Ok)
         .with_header("content-type", "application/json")
         .with_body(body)
+}
+
+fn xiaozhi_mcp_tools_response(
+    request: &sdkwork_aiot_transport::HttpRequest,
+) -> sdkwork_aiot_transport::HttpResponse {
+    let Some(device_id) = request
+        .query_param("device_id")
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return problem_json_response(
+            sdkwork_aiot_transport::HttpStatus::BadRequest,
+            "iot.device-edge.mcp_tools.device_id_required",
+            r#""detail":"device_id query parameter is required""#,
+        );
+    };
+    let Some(session_id) = sdkwork_aiot_device_edge_runtime::active_ws_session_id(device_id) else {
+        return problem_json_response(
+            sdkwork_aiot_transport::HttpStatus::NotFound,
+            "iot.device-edge.mcp_tools.session_not_found",
+            &format!(r#""deviceId":"{}""#, json_escape(device_id)),
+        );
+    };
+    sdkwork_aiot_transport::HttpResponse::new(sdkwork_aiot_transport::HttpStatus::Ok)
+        .with_header("content-type", "application/json")
+        .with_body(sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_session_tools_json(&session_id))
 }
 
 fn activation_registry_stats_response() -> sdkwork_aiot_transport::HttpResponse {

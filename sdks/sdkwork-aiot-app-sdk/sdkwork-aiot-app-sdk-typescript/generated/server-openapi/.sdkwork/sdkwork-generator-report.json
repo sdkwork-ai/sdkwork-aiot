@@ -12,7 +12,7 @@
   "mode": "apply",
   "hasChanges": true,
   "hasDestructiveChanges": false,
-  "changeFingerprint": "96ac4c84df104c8d4b5e41d74a7f9b786bdf40ab14045b120455f82500d9aca6",
+  "changeFingerprint": "3ecc0db0fcf0c507e4d055de06ac6d991679681fe9640a9c16100db5056679c2",
   "changeImpact": {
     "schemaVersion": 1,
     "areas": [
@@ -92,7 +92,6 @@
       {
         "area": "publish-workflow",
         "paths": [
-          "bin/publish-core.mjs",
           "bin/publish.ps1",
           "bin/publish.sh",
           "bin/sdk-gen.bat",
@@ -140,7 +139,7 @@
         "title": "Unified package check",
         "required": true,
         "rationale": "Validate the generated package with the unified publish helper. Triggered by: api-surface, models, runtime, build-metadata, publish-workflow, documentation, unknown.",
-        "workingDirectory": "E:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-app-sdk\\sdkwork-aiot-app-sdk-typescript\\generated\\server-openapi",
+        "workingDirectory": "D:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-app-sdk\\sdkwork-aiot-app-sdk-typescript\\generated\\server-openapi",
         "command": "node",
         "args": [
           "./bin/publish-core.mjs",
@@ -158,7 +157,7 @@
         "title": "Unified package build",
         "required": true,
         "rationale": "Run the full package build because this language uses a lighter check path than the final build. Triggered by: api-surface, models, runtime, build-metadata, publish-workflow, documentation, unknown.",
-        "workingDirectory": "E:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-app-sdk\\sdkwork-aiot-app-sdk-typescript\\generated\\server-openapi",
+        "workingDirectory": "D:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-app-sdk\\sdkwork-aiot-app-sdk-typescript\\generated\\server-openapi",
         "command": "node",
         "args": [
           "./bin/publish-core.mjs",
@@ -183,7 +182,7 @@
         "title": "Unified package check",
         "required": true,
         "rationale": "Validate the generated package with the unified publish helper. Triggered by: api-surface, models, runtime, build-metadata, publish-workflow, documentation, unknown.",
-        "workingDirectory": "E:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-app-sdk\\sdkwork-aiot-app-sdk-typescript\\generated\\server-openapi",
+        "workingDirectory": "D:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-app-sdk\\sdkwork-aiot-app-sdk-typescript\\generated\\server-openapi",
         "command": "node",
         "args": [
           "./bin/publish-core.mjs",
@@ -201,7 +200,7 @@
         "title": "Unified package build",
         "required": true,
         "rationale": "Run the full package build because this language uses a lighter check path than the final build. Triggered by: api-surface, models, runtime, build-metadata, publish-workflow, documentation, unknown.",
-        "workingDirectory": "E:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-app-sdk\\sdkwork-aiot-app-sdk-typescript\\generated\\server-openapi",
+        "workingDirectory": "D:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-app-sdk\\sdkwork-aiot-app-sdk-typescript\\generated\\server-openapi",
         "command": "node",
         "args": [
           "./bin/publish-core.mjs",
@@ -218,19 +217,19 @@
   },
   "sdk": {
     "name": "sdkwork-aiot-app-sdk",
-    "version": "0.1.15",
+    "version": "0.1.16",
     "language": "typescript",
     "sdkType": "app",
     "protocol": "http",
-    "outputPath": "E:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-app-sdk\\sdkwork-aiot-app-sdk-typescript\\generated\\server-openapi",
+    "outputPath": "D:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-app-sdk\\sdkwork-aiot-app-sdk-typescript\\generated\\server-openapi",
     "packageName": "@sdkwork/aiot-app-sdk"
   },
   "versioning": {
-    "resolvedVersion": "0.1.15",
+    "resolvedVersion": "0.1.16",
     "localVersions": [
-      "0.1.14"
+      "0.1.15"
     ],
-    "publishedVersion": "0.1.2"
+    "publishedVersion": "0.1.6"
   },
   "stats": {
     "totalFiles": 54,
@@ -242,16 +241,15 @@
   "syncSummary": {
     "dryRun": false,
     "controlPlaneEnabled": true,
-    "writtenFiles": 52,
+    "writtenFiles": 51,
     "skippedScaffoldFiles": 2,
-    "skippedUnchangedGeneratedFiles": 0,
+    "skippedUnchangedGeneratedFiles": 1,
     "deletedGeneratedFiles": 0,
     "changeSummaryPath": ".sdkwork/sdkwork-generator-changes.json",
-    "changeFingerprint": "96ac4c84df104c8d4b5e41d74a7f9b786bdf40ab14045b120455f82500d9aca6",
+    "changeFingerprint": "3ecc0db0fcf0c507e4d055de06ac6d991679681fe9640a9c16100db5056679c2",
     "changes": {
       "createdGeneratedFiles": [],
       "updatedGeneratedFiles": [
-        "bin/publish-core.mjs",
         "bin/publish.ps1",
         "bin/publish.sh",
         "bin/sdk-gen.bat",
@@ -304,7 +302,9 @@
         "src/types/sdk-work-resource-response.ts",
         "tsconfig.json"
       ],
-      "unchangedGeneratedFiles": [],
+      "unchangedGeneratedFiles": [
+        "bin/publish-core.mjs"
+      ],
       "deletedGeneratedFiles": [],
       "scaffoldedFiles": [],
       "preservedScaffoldFiles": [
@@ -312,7 +312,6 @@
         "custom/README.md"
       ],
       "backedUpFiles": [
-        "bin/publish-core.mjs",
         "bin/publish.ps1",
         "bin/publish.sh",
         "bin/sdk-gen.bat",
@@ -445,7 +444,6 @@
         {
           "area": "publish-workflow",
           "paths": [
-            "bin/publish-core.mjs",
             "bin/publish.ps1",
             "bin/publish.sh",
             "bin/sdk-gen.bat",
@@ -480,7 +478,7 @@
           "title": "Unified package check",
           "required": true,
           "rationale": "Validate the generated package with the unified publish helper. Triggered by: api-surface, models, runtime, build-metadata, publish-workflow, documentation, unknown.",
-          "workingDirectory": "E:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-app-sdk\\sdkwork-aiot-app-sdk-typescript\\generated\\server-openapi",
+          "workingDirectory": "D:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-app-sdk\\sdkwork-aiot-app-sdk-typescript\\generated\\server-openapi",
           "command": "node",
           "args": [
             "./bin/publish-core.mjs",
@@ -498,7 +496,7 @@
           "title": "Unified package build",
           "required": true,
           "rationale": "Run the full package build because this language uses a lighter check path than the final build. Triggered by: api-surface, models, runtime, build-metadata, publish-workflow, documentation, unknown.",
-          "workingDirectory": "E:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-app-sdk\\sdkwork-aiot-app-sdk-typescript\\generated\\server-openapi",
+          "workingDirectory": "D:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-app-sdk\\sdkwork-aiot-app-sdk-typescript\\generated\\server-openapi",
           "command": "node",
           "args": [
             "./bin/publish-core.mjs",
@@ -528,7 +526,6 @@
       ]
     },
     "backedUpFiles": [
-      "bin/publish-core.mjs",
       "bin/publish.ps1",
       "bin/publish.sh",
       "bin/sdk-gen.bat",

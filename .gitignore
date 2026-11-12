@@ -21,6 +21,7 @@ artifacts/release/sdkwork-aiot-*
 .runtime/
 **/.runtime/
 **/target/
+target-msvc/
 !.env.*.example
 !config/host/postgres.env.example
 dist/

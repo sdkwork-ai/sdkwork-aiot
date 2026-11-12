@@ -11,6 +11,8 @@ Specs: ARCHITECTURE_DECISION_SPEC.md, DOCUMENTATION_SPEC.md
 - [TECH-2026-05-31-sdkwork-aiot-server.md](TECH-2026-05-31-sdkwork-aiot-server.md)
 - [TECH-external-reference-selection.md](TECH-external-reference-selection.md)
 - [TECH-device-edge-horizontal-scaling.md](TECH-device-edge-horizontal-scaling.md)
+- [TECH-device-settings-admin.md](TECH-device-settings-admin.md)
+- [TECH-device-hardware-tools.md](TECH-device-hardware-tools.md)
 - [TECH-http-transport-evolution.md](TECH-http-transport-evolution.md)
 - [TECH-iam-integration.md](TECH-iam-integration.md)
 - [TECH-iam-via-appbase-proxy.md](TECH-iam-via-appbase-proxy.md)

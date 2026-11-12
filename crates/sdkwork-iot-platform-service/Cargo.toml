@@ -25,6 +25,7 @@ sdkwork-database-config.workspace = true
 sdkwork-aiot-transport.workspace = true
 sdkwork-utils-rust.workspace = true
 sdkwork-aiot-intelligence-bridge.workspace = true
+ureq = { version = "2.12", default-features = false, features = ["tls"] }
 
 [features]
 default = ["intelligence-kernel"]

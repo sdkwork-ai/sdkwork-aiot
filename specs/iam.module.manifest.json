@@ -205,6 +205,24 @@
         "status": "active",
         "since": "1.0.0",
         "replacementCode": null
+      },
+      {
+        "code": "iot.deviceSettings.read",
+        "name": "Read IoT device settings",
+        "resource": "iot.deviceSettings",
+        "action": "read",
+        "status": "active",
+        "since": "1.1.0",
+        "replacementCode": null
+      },
+      {
+        "code": "iot.deviceSettings.write",
+        "name": "Write IoT device settings",
+        "resource": "iot.deviceSettings",
+        "action": "write",
+        "status": "active",
+        "since": "1.1.0",
+        "replacementCode": null
       }
     ],
     "openapiAuthorities": [

@@ -92,4 +92,16 @@ export {
   VITE_SDKWORK_AIOT_VOICE_TRANSCRIPTION_MODEL,
 } from './sdk/topologyEnvKeys';
 export type { AiotDevice, SdkworkAiotAppClient } from '@sdkwork/aiot-app-sdk';
-export type { AiotFirmwareArtifact } from '@sdkwork/aiot-backend-sdk';
+export type {
+  AiotDeviceHardwareTool,
+  AiotDeviceHardwareTools,
+  AiotDeviceSettingDefinition,
+  AiotDeviceSettingKind,
+  AiotDeviceSettingMap,
+  AiotDeviceSettingOption,
+  AiotDeviceSettings,
+  AiotDeviceSettingsUpdateRequest,
+  AiotFirmwareArtifact,
+  JsonValue,
+  SdkworkAiotBackendClient,
+} from '@sdkwork/aiot-backend-sdk';

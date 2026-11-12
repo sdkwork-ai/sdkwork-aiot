@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "@sdkwork/aiot-pc-console-admin",
+    "displayName": "SDKWork AIoT Device Administration PC Console",
+    "version": "0.1.0",
+    "type": "react-package",
+    "root": "sdkwork-aiot/apps/sdkwork-aiot-pc/packages/sdkwork-aiot-pc-console-admin",
+    "domain": "admin",
+    "declaredDomain": "admin",
+    "capability": "device-settings-admin",
+    "status": "ready",
+    "product": "sdkwork-aiot",
+    "languages": [
+      "typescript",
+      "react"
+    ],
+    "generated": false,
+    "private": true,
+    "manifests": [
+      "package.json"
+    ]
+  },
+  "canonicalSpecs": [
+    {
+      "file": "APP_PC_REACT_UI_SPEC.md",
+      "path": "../../../../../../sdkwork-specs/APP_PC_REACT_UI_SPEC.md",
+      "purpose": "App PC React package split, app SDK boundary, and desktop interaction rules."
+    },
+    {
+      "file": "APP_PC_ARCHITECTURE_SPEC.md",
+      "path": "../../../../../../sdkwork-specs/APP_PC_ARCHITECTURE_SPEC.md",
+      "purpose": "PC browser, desktop, and tablet application root rules."
+    },
+    {
+      "file": "MODULE_SPEC.md",
+      "path": "../../../../../../sdkwork-specs/MODULE_SPEC.md",
+      "purpose": "Reusable package contract and dependency direction."
+    },
+    {
+      "file": "DOMAIN_SPEC.md",
+      "path": "../../../../../../sdkwork-specs/DOMAIN_SPEC.md",
+      "purpose": "Canonical domain ownership and naming."
+    },
+    {
+      "file": "SDK_SPEC.md",
+      "path": "../../../../../../sdkwork-specs/SDK_SPEC.md",
+      "purpose": "SDK generation and SDK integration rules."
+    }
+  ],
+  "contracts": {
+    "layerRole": "frontend-feature",
+    "providedPorts": [],
+    "requiredPorts": [],
+    "publicExports": [
+      "."
+    ],
+    "runtimeEntrypoints": [
+      "package.json#scripts.typecheck"
+    ],
+    "sdkClients": [
+      "@sdkwork/aiot-backend-sdk"
+    ],
+    "events": [],
+    "configKeys": [
+      "package.json#sdkwork"
+    ],
+    "routeManifest": null
+  },
+  "integration": {
+    "authority": "Root SDKWork specs remain authoritative. Local specs may extend but must not contradict them.",
+    "dependencyPolicy": "Consumers integrate through public package exports, declared runtime entrypoints, generated SDK clients, or documented adapters only.",
+    "sdkPolicy": "Generated SDK clients are injected through service/runtime boundaries; reusable UI must not create raw HTTP clients or manual auth headers.",
+    "languagePolicy": "Language-specific packages follow their native manifest and build tools while preserving the same component contract."
+  },
+  "verification": {
+    "commands": [
+      "pnpm --filter @sdkwork/aiot-pc-console-admin typecheck",
+      "pnpm --filter @sdkwork/aiot-pc-console-admin test"
+    ]
+  },
+  "metadata": {
+    "managedBy": "apps/scripts/initialize-component-specs.mjs",
+    "standardVersion": "2026-06-07"
+  }
+}

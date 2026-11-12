@@ -49,12 +49,3 @@ pub struct ProviderTtsAudio {
     pub sample_rate: u32,
     pub bytes: Vec<u8>,
 }
-
-pub fn decode_speech_payload(raw: &str) -> Vec<u8> {
-    if let Ok(bytes) = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, raw) {
-        if !bytes.is_empty() {
-            return bytes;
-        }
-    }
-    raw.as_bytes().to_vec()
-}

@@ -146,12 +146,26 @@ function resolveLocalDevEdgeIngressWebSocketBaseUrl(): string | undefined {
   return isSdkRuntimeDev() ? DEFAULT_LOCAL_EDGE_DEVICE_INGRESS_WEBSOCKET_URL : undefined;
 }
 
+function readExplicitSdkApiBaseUrl(): string | undefined {
+  return readFirstNonBlank([
+    readSdkBaseUrlEnvValue('SDKWORK_API_BASE_URL'),
+    readNodeEnvValue('SDKWORK_API_BASE_URL'),
+  ]);
+}
+
 function resolveSdkApiBaseUrl(): string {
   // Unified single base-url key (SDKWORK_API_BASE_URL); the matching API host
   // is chosen from the current page's environment+brand. All SDK clients in
   // this package expect a bare origin — SDK-owned path prefixes (/app/v3/api
   // etc.) are appended by the generated SDK clients themselves, so path
   // preservation stays off.
+  // An explicitly configured base URL always wins over host-derived defaults;
+  // the shared resolver's host heuristic only applies when the operator did not
+  // configure one.
+  const explicit = readExplicitSdkApiBaseUrl();
+  if (explicit) {
+    return normalizeHttpSdkBaseUrl(explicit);
+  }
   return resolveBaseUrlWithAlignProtocol({ envKey: 'SDKWORK_API_BASE_URL' }).url;
 }
 
@@ -173,7 +187,10 @@ export function resolveDriveAppApiBaseUrl(): string {
 
 export function isAgentsAppSdkConfigured(): boolean {
   // The unified single base-url key drives sibling-app SDK availability.
-  return resolveBaseUrlWithAlignProtocol({ envKey: 'SDKWORK_API_BASE_URL' }).reason !== 'empty';
+  return (
+    readExplicitSdkApiBaseUrl() !== undefined
+    || resolveBaseUrlWithAlignProtocol({ envKey: 'SDKWORK_API_BASE_URL' }).reason !== 'empty'
+  );
 }
 
 export function resolveAgentsAppApiBaseUrl(): string {
@@ -181,7 +198,10 @@ export function resolveAgentsAppApiBaseUrl(): string {
 }
 
 export function isVoiceAppSdkConfigured(): boolean {
-  return resolveBaseUrlWithAlignProtocol({ envKey: 'SDKWORK_API_BASE_URL' }).reason !== 'empty';
+  return (
+    readExplicitSdkApiBaseUrl() !== undefined
+    || resolveBaseUrlWithAlignProtocol({ envKey: 'SDKWORK_API_BASE_URL' }).reason !== 'empty'
+  );
 }
 
 export function resolveVoiceAppApiBaseUrl(): string {

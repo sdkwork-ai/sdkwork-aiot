@@ -90,7 +90,7 @@ export function createAiotCommandService(
       const acceptance = await aiotClient.iot.devices.commands.create(
         input.deviceId,
         body,
-        input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined,
+        { idempotencyKey: input.idempotencyKey ?? createMessageId('cmd') },
       );
 
       return mapCommandAcceptance(acceptance, input);

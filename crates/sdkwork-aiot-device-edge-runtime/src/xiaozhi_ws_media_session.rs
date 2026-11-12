@@ -53,6 +53,15 @@ pub fn clear_ws_uplink_buffer(session_id: &str) {
     }
 }
 
+/// True when the session has buffered Opus uplink packets waiting for a turn.
+pub fn ws_uplink_has_audio(session_id: &str) -> bool {
+    store()
+        .lock()
+        .ok()
+        .and_then(|guard| guard.get(session_id).map(|entry| !entry.uplink.is_empty()))
+        .unwrap_or(false)
+}
+
 pub fn take_ws_uplink_wav(session_id: &str) -> Result<Option<Vec<u8>>, String> {
     let mut guard = store()
         .lock()

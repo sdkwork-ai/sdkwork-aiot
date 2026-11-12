@@ -1,16 +1,24 @@
 mod active_ws_sessions;
 mod command_delivery_worker;
 mod mqtt_bridge_readiness;
+mod xiaozhi_mcp_catalog;
 mod xiaozhi_ws_media_session;
 
 pub use active_ws_sessions::{
-    active_ws_sessions, register_active_ws_session, touch_active_ws_session,
+    active_ws_session_id, active_ws_sessions, register_active_ws_session, touch_active_ws_session,
     unregister_active_ws_session,
 };
 pub use command_delivery_worker::start_command_delivery_worker;
 pub use mqtt_bridge_readiness::{
     mqtt_bridge_health_status, mqtt_bridge_readiness_probe, MqttBridgeRuntimeSnapshot,
     MqttBridgeRuntimeState, ENV_MQTT_BRIDGE_ENABLE,
+};
+pub use xiaozhi_mcp_catalog::{
+    begin_initialize as xiaozhi_mcp_begin_initialize, clear_session as xiaozhi_mcp_clear_session,
+    discovery_complete as xiaozhi_mcp_discovery_complete,
+    next_request_id as xiaozhi_mcp_next_request_id, on_mcp_message as xiaozhi_mcp_on_mcp_message,
+    session_tools as xiaozhi_mcp_session_tools,
+    session_tools_json as xiaozhi_mcp_session_tools_json, XiaozhiMcpTool,
 };
 
 use std::cell::RefCell;
@@ -1438,6 +1446,9 @@ fn device_credential_repository_from_env() -> Option<Arc<SqlxCredentialRepositor
     }
 }
 
+// Fail-closed startup guard: the edge runtime must not accept traffic without
+// durable protocol ingest persistence.
+#[allow(clippy::exit)]
 fn protocol_ingest_from_env() -> Arc<dyn AiotProtocolIngestUnitOfWork> {
     static PROTOCOL_INGEST: OnceLock<Arc<dyn AiotProtocolIngestUnitOfWork>> = OnceLock::new();
     PROTOCOL_INGEST
@@ -2093,6 +2104,53 @@ fn xiaozhi_listen_mqtt_speech_replies(
     xiaozhi_simulator_mqtt_speech_replies(session, user_text, SIMULATOR_TTS_SUBTITLE)
 }
 
+/// What the server must do when a device reports `listen: stop`.
+///
+/// `RunSpeech` runs the buffered utterance through ASR/LLM/TTS; `StopPlayback`
+/// only terminates playback (empty utterance or simulator mode); the kernel
+/// mode without a pipeline is a fail-closed configuration error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum XiaozhiListenStopAction {
+    KernelMisconfigured,
+    RunSpeech,
+    StopPlayback,
+}
+
+pub fn xiaozhi_listen_stop_action(
+    has_pipeline: bool,
+    kernel_mode: bool,
+    has_audio: bool,
+) -> XiaozhiListenStopAction {
+    if has_pipeline {
+        return if has_audio {
+            XiaozhiListenStopAction::RunSpeech
+        } else {
+            XiaozhiListenStopAction::StopPlayback
+        };
+    }
+    if kernel_mode {
+        return XiaozhiListenStopAction::KernelMisconfigured;
+    }
+    XiaozhiListenStopAction::StopPlayback
+}
+
+fn xiaozhi_listen_mqtt_stop_replies(
+    session: &mut XiaozhiMqttUdpSession,
+    pipeline: &KernelSpeechPipeline,
+) -> Result<(Vec<String>, Vec<Vec<u8>>), TransportError> {
+    let turn_input = xiaozhi_production_speech_turn_input(&session.session_id, None)?;
+    xiaozhi_production_mqtt_speech_replies(session, pipeline, turn_input)
+}
+
+fn xiaozhi_listen_websocket_stop_replies(
+    request: &HttpRequest,
+    session_id: &str,
+    pipeline: &KernelSpeechPipeline,
+) -> Result<Vec<WebSocketSessionReply>, TransportError> {
+    let turn_input = xiaozhi_production_speech_turn_input(session_id, None)?;
+    xiaozhi_production_websocket_speech_replies(request, session_id, pipeline, turn_input)
+}
+
 fn xiaozhi_mqtt_goodbye_matches_session(
     session: &XiaozhiMqttUdpSession,
     inbound_session_id: Option<&str>,
@@ -2220,8 +2278,10 @@ pub fn xiaozhi_websocket_session_reply_with_mcp_tool_provider_and_invoker(
                 .get("xiaozhi.feature.mcp")
                 .is_some_and(|value| value == "true")
             {
+                let initialize_id = xiaozhi_mcp_next_request_id();
+                xiaozhi_mcp_begin_initialize(&session_id, initialize_id);
                 replies.push(WebSocketSessionReply::Text(format!(
-                    r#"{{"session_id":"{}","type":"mcp","payload":{{"jsonrpc":"2.0","method":"initialize","params":{{"capabilities":{{"vision":{{"url":"http://localhost/iot/xiaozhi/vision","token":"simulator-token"}}}}}},"id":1}}}}"#,
+                    r#"{{"session_id":"{}","type":"mcp","payload":{{"jsonrpc":"2.0","method":"initialize","params":{{"capabilities":{{"vision":{{"url":"http://localhost/iot/xiaozhi/vision","token":"simulator-token"}}}}}},"id":{initialize_id}}}}}"#,
                     json_escape(&session_id)
                 )));
             }
@@ -2245,19 +2305,45 @@ pub fn xiaozhi_websocket_session_reply_with_mcp_tool_provider_and_invoker(
                     )?);
                 }
             } else if state == "detect" {
-                let user_text = xiaozhi_simulator_listen_user_text(&result.envelope);
-                replies.extend(xiaozhi_listen_websocket_speech_replies(
-                    request,
-                    &session_id,
-                    speech_pipeline,
-                    &user_text,
-                )?);
+                // `detect` is the device wake-word notification: in production
+                // the following `start`/audio frames carry the utterance, so the
+                // wake word must not be turned into a user prompt.
+                if speech_pipeline.is_none() && !is_kernel_mode() {
+                    let user_text = xiaozhi_simulator_listen_user_text(&result.envelope);
+                    replies.extend(xiaozhi_listen_websocket_speech_replies(
+                        request,
+                        &session_id,
+                        speech_pipeline,
+                        &user_text,
+                    )?);
+                }
             } else if state == "stop" {
-                xiaozhi_ws_media_session::clear_ws_uplink_buffer(&session_id);
-                replies.push(WebSocketSessionReply::Text(format!(
-                    r#"{{"session_id":"{}","type":"tts","state":"stop"}}"#,
-                    json_escape(&session_id)
-                )));
+                let has_audio = xiaozhi_ws_media_session::ws_uplink_has_audio(&session_id);
+                match xiaozhi_listen_stop_action(
+                    speech_pipeline.is_some(),
+                    is_kernel_mode(),
+                    has_audio,
+                ) {
+                    XiaozhiListenStopAction::RunSpeech => {
+                        if let Some(pipeline) = speech_pipeline {
+                            replies.extend(xiaozhi_listen_websocket_stop_replies(
+                                request,
+                                &session_id,
+                                pipeline,
+                            )?);
+                        }
+                    }
+                    XiaozhiListenStopAction::StopPlayback => {
+                        xiaozhi_ws_media_session::clear_ws_uplink_buffer(&session_id);
+                        replies.push(WebSocketSessionReply::Text(format!(
+                            r#"{{"session_id":"{}","type":"tts","state":"stop"}}"#,
+                            json_escape(&session_id)
+                        )));
+                    }
+                    XiaozhiListenStopAction::KernelMisconfigured => {
+                        return Err(TransportError::new("intelligence.kernel.misconfigured"));
+                    }
+                }
             }
         }
         "mcp" => {
@@ -2291,6 +2377,21 @@ pub fn xiaozhi_websocket_session_reply_with_mcp_tool_provider_and_invoker(
             ) {
                 replies.push(WebSocketSessionReply::Text(outbound));
             }
+            if let Some(next_payload) = xiaozhi_mcp_on_mcp_message(
+                &session_id,
+                kind,
+                result
+                    .envelope
+                    .extensions
+                    .get("xiaozhi.mcp.id_json")
+                    .map(String::as_str),
+                inbound_json.unwrap_or(""),
+            ) {
+                replies.push(WebSocketSessionReply::Text(format!(
+                    r#"{{"session_id":"{}","type":"mcp","payload":{next_payload}}}"#,
+                    json_escape(&session_id)
+                )));
+            }
         }
         "audio" => {
             if frame.opcode == WebSocketOpcode::Binary {
@@ -2319,12 +2420,14 @@ pub fn xiaozhi_websocket_session_reply_with_mcp_tool_provider_and_invoker(
             }
         }
         "abort" => {
+            xiaozhi_ws_media_session::clear_ws_uplink_buffer(&session_id);
             replies.push(WebSocketSessionReply::Text(format!(
                 r#"{{"session_id":"{}","type":"tts","state":"stop"}}"#,
                 json_escape(&session_id)
             )));
         }
         "goodbye" => {
+            xiaozhi_mcp_clear_session(&session_id);
             replies.push(WebSocketSessionReply::Close);
         }
         _ => {}
@@ -2489,8 +2592,10 @@ pub fn xiaozhi_mqtt_session_reply_with_mcp_tool_provider_and_invoker(
                 .get("xiaozhi.feature.mcp")
                 .is_some_and(|value| value == "true")
             {
+                let initialize_id = xiaozhi_mcp_next_request_id();
+                xiaozhi_mcp_begin_initialize(&session_id, initialize_id);
                 outbound.push(format!(
-                    r#"{{"session_id":"{}","type":"mcp","payload":{{"jsonrpc":"2.0","method":"initialize","params":{{"capabilities":{{"vision":{{"url":"http://localhost/iot/xiaozhi/vision","token":"simulator-token"}}}}}},"id":1}}}}"#,
+                    r#"{{"session_id":"{}","type":"mcp","payload":{{"jsonrpc":"2.0","method":"initialize","params":{{"capabilities":{{"vision":{{"url":"http://localhost/iot/xiaozhi/vision","token":"simulator-token"}}}}}},"id":{initialize_id}}}}}"#,
                     json_escape(&session_id)
                 ));
             }
@@ -2528,20 +2633,47 @@ pub fn xiaozhi_mqtt_session_reply_with_mcp_tool_provider_and_invoker(
                         outbound_udp.extend(udp);
                     }
                 } else if state == "detect" {
-                    let user_text = xiaozhi_simulator_listen_user_text(&result.envelope);
-                    let (json, udp) = xiaozhi_listen_mqtt_speech_replies(
-                        working_session,
-                        speech_pipeline,
-                        &user_text,
-                    )?;
-                    outbound.extend(json);
-                    outbound_udp.extend(udp);
+                    // Wake-word notification only; production utterances arrive
+                    // through the following start/audio/stop sequence.
+                    if speech_pipeline.is_none() && !is_kernel_mode() {
+                        let user_text = xiaozhi_simulator_listen_user_text(&result.envelope);
+                        let (json, udp) = xiaozhi_listen_mqtt_speech_replies(
+                            working_session,
+                            speech_pipeline,
+                            &user_text,
+                        )?;
+                        outbound.extend(json);
+                        outbound_udp.extend(udp);
+                    }
                 } else if state == "stop" {
-                    xiaozhi_ws_media_session::clear_ws_uplink_buffer(&working_session.session_id);
-                    outbound.push(format!(
-                        r#"{{"session_id":"{}","type":"tts","state":"stop"}}"#,
-                        json_escape(&working_session.session_id)
-                    ));
+                    let has_audio =
+                        xiaozhi_ws_media_session::ws_uplink_has_audio(&working_session.session_id);
+                    match xiaozhi_listen_stop_action(
+                        speech_pipeline.is_some(),
+                        is_kernel_mode(),
+                        has_audio,
+                    ) {
+                        XiaozhiListenStopAction::RunSpeech => {
+                            if let Some(pipeline) = speech_pipeline {
+                                let (json, udp) =
+                                    xiaozhi_listen_mqtt_stop_replies(working_session, pipeline)?;
+                                outbound.extend(json);
+                                outbound_udp.extend(udp);
+                            }
+                        }
+                        XiaozhiListenStopAction::StopPlayback => {
+                            xiaozhi_ws_media_session::clear_ws_uplink_buffer(
+                                &working_session.session_id,
+                            );
+                            outbound.push(format!(
+                                r#"{{"session_id":"{}","type":"tts","state":"stop"}}"#,
+                                json_escape(&working_session.session_id)
+                            ));
+                        }
+                        XiaozhiListenStopAction::KernelMisconfigured => {
+                            return Err(TransportError::new("intelligence.kernel.misconfigured"));
+                        }
+                    }
                 }
             }
         }
@@ -2577,10 +2709,26 @@ pub fn xiaozhi_mqtt_session_reply_with_mcp_tool_provider_and_invoker(
                 ) {
                     outbound.push(outbound_json);
                 }
+                if let Some(next_payload) = xiaozhi_mcp_on_mcp_message(
+                    &working_session.session_id,
+                    kind,
+                    result
+                        .envelope
+                        .extensions
+                        .get("xiaozhi.mcp.id_json")
+                        .map(String::as_str),
+                    inbound_json.unwrap_or(""),
+                ) {
+                    outbound.push(format!(
+                        r#"{{"session_id":"{}","type":"mcp","payload":{next_payload}}}"#,
+                        json_escape(&working_session.session_id)
+                    ));
+                }
             }
         }
         "abort" => {
             if let Some(working_session) = next_session.as_ref() {
+                xiaozhi_ws_media_session::clear_ws_uplink_buffer(&working_session.session_id);
                 outbound.push(format!(
                     r#"{{"session_id":"{}","type":"tts","state":"stop"}}"#,
                     json_escape(&working_session.session_id)
@@ -2593,9 +2741,13 @@ pub fn xiaozhi_mqtt_session_reply_with_mcp_tool_provider_and_invoker(
                 .session_id
                 .clone()
                 .or_else(|| json_string_field(inbound_json, "session_id"));
-            if next_session.as_ref().is_some_and(|working_session| {
+            let matches_session = next_session.as_ref().is_some_and(|working_session| {
                 xiaozhi_mqtt_goodbye_matches_session(working_session, inbound_session_id.as_deref())
-            }) {
+            });
+            if matches_session {
+                if let Some(working_session) = next_session.as_ref() {
+                    xiaozhi_mcp_clear_session(&working_session.session_id);
+                }
                 // Device-initiated MQTT goodbye closes the UDP channel locally.
                 // Do not echo goodbye back; external/xiaozhi-esp32 avoids ping-pong replies.
                 close_audio_channel = true;
@@ -2672,6 +2824,9 @@ pub fn production_environment_enabled() -> bool {
 
 const PRODUCTION_MIN_SECRET_LENGTH: usize = 32;
 
+// Startup contract: production misconfiguration terminates the process instead
+// of serving with unsafe defaults.
+#[allow(clippy::exit)]
 pub fn assert_production_environment_safety() {
     if !production_environment_enabled() {
         return;
@@ -2970,7 +3125,11 @@ fn xiaozhi_simulator_mcp_reply(
 ) -> Option<String> {
     match kind {
         "notification" => None,
-        "response" => Some(xiaozhi_mcp_tools_list_request(session_id, "", false, 2)),
+        // A response/error belongs to a request the server already sent; it must
+        // never be answered with another request (that would loop forever on a
+        // real device). Discovery follow-ups are handled by
+        // `xiaozhi_mcp_catalog::on_mcp_message`.
+        "response" | "error" => None,
         "payload" => None,
         "request" => {
             let request = parse_xiaozhi_mcp_request(inbound_json, id_json_hint, method_hint);
@@ -3119,21 +3278,6 @@ fn xiaozhi_mcp_initialize_result(session_id: &str, id_json: &str) -> String {
         SIMULATOR_PROTOCOL_VERSION,
         SIMULATOR_SERVER_NAME,
         env!("CARGO_PKG_VERSION")
-    );
-    xiaozhi_mcp_wrap_payload(session_id, payload)
-}
-
-fn xiaozhi_mcp_tools_list_request(
-    session_id: &str,
-    cursor: &str,
-    with_user_tools: bool,
-    id: u32,
-) -> String {
-    let payload = format!(
-        r#"{{"jsonrpc":"2.0","method":"tools/list","params":{{"cursor":"{}","withUserTools":{}}},"id":{}}}"#,
-        json_escape(cursor),
-        if with_user_tools { "true" } else { "false" },
-        id
     );
     xiaozhi_mcp_wrap_payload(session_id, payload)
 }
@@ -3639,6 +3783,8 @@ fn mcp_policy_rule_matches(
     true
 }
 
+// Staged suffix matching reads better as an if-let chain than nested `?`.
+#[allow(clippy::question_mark)]
 fn parse_mcp_policy_numeric_argument_predicate(
     key: &str,
     value: &str,
@@ -3726,6 +3872,8 @@ fn mcp_policy_numeric_compare(
     }
 }
 
+// Staged suffix matching reads better as an if-let chain than nested `?`.
+#[allow(clippy::question_mark)]
 fn parse_mcp_policy_string_argument_predicate(
     key: &str,
     value: &str,
@@ -3781,6 +3929,8 @@ fn mcp_policy_string_predicates_match(
     })
 }
 
+// Staged suffix matching reads better as an if-let chain than nested `?`.
+#[allow(clippy::question_mark)]
 fn parse_mcp_policy_boolean_argument_predicate(
     key: &str,
     value: &str,
@@ -4123,7 +4273,7 @@ fn encode_registry_hex(value: &str) -> String {
 }
 
 fn decode_registry_hex(value: &str) -> Option<String> {
-    if !value.len().is_multiple_of(2) {
+    if value.len() % 2 != 0 {
         return None;
     }
     let mut out = Vec::with_capacity(value.len() / 2);

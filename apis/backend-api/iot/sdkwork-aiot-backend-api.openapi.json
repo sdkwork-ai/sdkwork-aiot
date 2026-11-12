@@ -2925,6 +2925,551 @@
         "x-sdkwork-api-authority": "sdkwork-aiot-backend-api",
         "parameters": []
       }
+    },
+    "/backend/v3/api/iot/devices/{deviceId}/settings": {
+      "get": {
+        "tags": [
+          "iot"
+        ],
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceId"
+          }
+        ],
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-owner": "sdkwork-aiot",
+        "x-sdkwork-api-authority": "sdkwork-aiot-backend-api",
+        "operationId": "devices.settings.retrieve",
+        "x-sdkwork-required-permission": "iot.deviceSettings.read",
+        "summary": "Retrieve effective device settings",
+        "description": "Returns the capability model settings schema, inherited defaults, device overrides, and the effective configuration of one terminal device.",
+        "responses": {
+          "200": {
+            "description": "Device settings resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "required": [
+                            "item"
+                          ],
+                          "properties": {
+                            "item": {
+                              "$ref": "#/components/schemas/AiotDeviceSettings"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "iot"
+        ],
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceId"
+          }
+        ],
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-owner": "sdkwork-aiot",
+        "x-sdkwork-api-authority": "sdkwork-aiot-backend-api",
+        "operationId": "devices.settings.update",
+        "x-sdkwork-required-permission": "iot.deviceSettings.write",
+        "summary": "Update device settings overrides",
+        "description": "Replaces the device-scoped settings overrides after validating them against the inherited capability model schema and the optional expectedRevision.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiotDeviceSettingsUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device settings resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "required": [
+                            "item"
+                          ],
+                          "properties": {
+                            "item": {
+                              "$ref": "#/components/schemas/AiotDeviceSettings"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The expectedRevision no longer matches the stored revision.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "One or more setting values violate the declared schema.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "iot"
+        ],
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceId"
+          }
+        ],
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-owner": "sdkwork-aiot",
+        "x-sdkwork-api-authority": "sdkwork-aiot-backend-api",
+        "operationId": "devices.settings.delete",
+        "x-sdkwork-required-permission": "iot.deviceSettings.write",
+        "summary": "Reset device settings to inherited defaults",
+        "description": "Clears every device-scoped override so the capability model defaults apply again.",
+        "responses": {
+          "204": {
+            "description": "Device settings overrides cleared."
+          },
+          "409": {
+            "description": "The stored overrides no longer match the capability model schema.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/backend/v3/api/iot/devices/{deviceId}/hardware_tools": {
+      "get": {
+        "tags": [
+          "iot"
+        ],
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceId"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "One-based page index.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Page size (max 200).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          }
+        ],
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-owner": "sdkwork-aiot",
+        "x-sdkwork-api-authority": "sdkwork-aiot-backend-api",
+        "operationId": "devices.hardwareTools.list",
+        "x-sdkwork-required-permission": "iot.devices.read",
+        "summary": "List live hardware tools exposed by a device",
+        "description": "Returns the MCP hardware tool catalog discovered from the device's active Xiaozhi session. Offline devices report online=false with an empty tool list.",
+        "responses": {
+          "200": {
+            "description": "Device hardware tool catalog.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "required": [
+                            "item"
+                          ],
+                          "properties": {
+                            "item": {
+                              "$ref": "#/components/schemas/AiotDeviceHardwareTools"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/backend/v3/api/iot/devices/{deviceId}/settings/history": {
+      "get": {
+        "tags": [
+          "iot"
+        ],
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-owner": "sdkwork-aiot",
+        "x-sdkwork-api-authority": "sdkwork-aiot-backend-api",
+        "operationId": "devices.settings.history.list",
+        "x-sdkwork-required-permission": "iot.deviceSettings.read",
+        "summary": "List device settings revisions",
+        "description": "Returns the append-only settings revision history of one device, newest first, including who changed it and which setting keys changed.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceId"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Device settings revision collection.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/backend/v3/api/iot/devices/{deviceId}/settings/rollback": {
+      "post": {
+        "tags": [
+          "iot"
+        ],
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-owner": "sdkwork-aiot",
+        "x-sdkwork-api-authority": "sdkwork-aiot-backend-api",
+        "operationId": "devices.settings.rollback",
+        "x-sdkwork-required-permission": "iot.deviceSettings.write",
+        "summary": "Roll back device settings to a recorded revision",
+        "description": "Restores the overrides recorded at a previous revision as a new revision, revalidates them against the current capability model schema, and publishes the effective settings to the device twin.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiotDeviceSettingsRollbackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device settings resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "required": [
+                            "item"
+                          ],
+                          "properties": {
+                            "item": {
+                              "$ref": "#/components/schemas/AiotDeviceSettings"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The device or the target revision was not found.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The expectedRevision no longer matches the stored revision.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The recorded overrides no longer satisfy the current schema.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/backend/v3/api/iot/device_settings/bulk_update": {
+      "post": {
+        "tags": [
+          "iot"
+        ],
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-owner": "sdkwork-aiot",
+        "x-sdkwork-api-authority": "sdkwork-aiot-backend-api",
+        "operationId": "deviceSettings.bulkUpdate",
+        "x-sdkwork-required-permission": "iot.deviceSettings.write",
+        "summary": "Apply device settings overrides to multiple devices",
+        "description": "Applies one override set per device with item-level validation and result semantics. With allOrNothing=true no device is written when any item fails validation.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiotDeviceSettingsBulkUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-device bulk update results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "items",
+                            "allOrNothing"
+                          ],
+                          "properties": {
+                            "items": {
+                              "type": "array",
+                              "maxItems": 100,
+                              "items": {
+                                "$ref": "#/components/schemas/AiotDeviceSettingsBulkItemResult"
+                              }
+                            },
+                            "allOrNothing": {
+                              "type": "boolean"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The bulk request is malformed or exceeds the item limit.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Any item is semantically invalid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3332,6 +3877,13 @@
             "items": {
               "$ref": "#/components/schemas/CapabilityDefinition"
             }
+          },
+          "settings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiotDeviceSettingDefinition"
+            },
+            "description": "Per-device settings schema inherited by every device of this capability model."
           }
         }
       },
@@ -3356,6 +3908,13 @@
           "status": {
             "type": "string",
             "maxLength": 64
+          },
+          "settings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiotDeviceSettingDefinition"
+            },
+            "description": "Per-device settings schema inherited by every device of this capability model."
           }
         }
       },
@@ -4723,6 +5282,386 @@
             }
           }
         ]
+      },
+      "AiotDeviceHardwareTool": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "inputSchema"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "AiotDeviceHardwareTools": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "deviceId",
+          "online",
+          "discovered",
+          "tools"
+        ],
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "online": {
+            "type": "boolean"
+          },
+          "discovered": {
+            "type": "boolean"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiotDeviceHardwareTool"
+            }
+          }
+        }
+      },
+      "AiotDeviceSettingKind": {
+        "type": "string",
+        "enum": [
+          "boolean",
+          "integer",
+          "number",
+          "string",
+          "enum",
+          "json"
+        ],
+        "description": "Value domain of one device setting."
+      },
+      "AiotDeviceSettingOption": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 128
+          }
+        }
+      },
+      "AiotDeviceSettingDefinition": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "settingKey",
+          "displayName",
+          "kind"
+        ],
+        "properties": {
+          "settingKey": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9._-]+$",
+            "description": "Stable dotted setting key, for example audio.volume."
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AiotDeviceSettingKind"
+          },
+          "required": {
+            "type": "boolean",
+            "default": false
+          },
+          "writable": {
+            "type": "boolean",
+            "default": true
+          },
+          "sensitive": {
+            "type": "boolean",
+            "default": false
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "defaultValue": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "minimum": {
+            "type": "number"
+          },
+          "maximum": {
+            "type": "number"
+          },
+          "maxLength": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiotDeviceSettingOption"
+            }
+          }
+        }
+      },
+      "AiotDeviceSettingMap": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "description": "Setting key to JSON value map."
+      },
+      "AiotDeviceSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "deviceId",
+          "productId",
+          "capabilityModelId",
+          "revision",
+          "definitions",
+          "defaults",
+          "overrides",
+          "effective"
+        ],
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "capabilityModelId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string",
+            "format": "int64",
+            "pattern": "^-?[0-9]+$",
+            "x-sdkwork-int64-string": true,
+            "description": "Monotonic overrides revision used for optimistic concurrency."
+          },
+          "definitions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiotDeviceSettingDefinition"
+            }
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/AiotDeviceSettingMap"
+          },
+          "overrides": {
+            "$ref": "#/components/schemas/AiotDeviceSettingMap"
+          },
+          "effective": {
+            "$ref": "#/components/schemas/AiotDeviceSettingMap"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedBy": {
+            "type": "string"
+          }
+        }
+      },
+      "AiotDeviceSettingsUpdateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "overrides"
+        ],
+        "properties": {
+          "expectedRevision": {
+            "type": "string",
+            "format": "int64",
+            "pattern": "^-?[0-9]+$",
+            "x-sdkwork-int64-string": true,
+            "description": "Revision returned by the last read; mismatch fails with HTTP 409."
+          },
+          "overrides": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AiotDeviceSettingMap"
+              }
+            ],
+            "description": "Replacement override set. A null value clears that setting so the inherited default applies again."
+          }
+        }
+      },
+      "AiotDeviceSettingsChangeAction": {
+        "type": "string",
+        "enum": [
+          "update",
+          "reset",
+          "rollback"
+        ],
+        "description": "Why a settings revision was created."
+      },
+      "AiotDeviceSettingsHistoryEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revision",
+          "action",
+          "changedKeys",
+          "overrides",
+          "updatedAt"
+        ],
+        "properties": {
+          "revision": {
+            "type": "string",
+            "format": "int64",
+            "pattern": "^-?[0-9]+$",
+            "x-sdkwork-int64-string": true
+          },
+          "action": {
+            "$ref": "#/components/schemas/AiotDeviceSettingsChangeAction"
+          },
+          "changedKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "overrides": {
+            "$ref": "#/components/schemas/AiotDeviceSettingMap"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedBy": {
+            "type": "string"
+          }
+        }
+      },
+      "AiotDeviceSettingsRollbackRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "targetRevision"
+        ],
+        "properties": {
+          "targetRevision": {
+            "type": "string",
+            "format": "int64",
+            "pattern": "^-?[0-9]+$",
+            "x-sdkwork-int64-string": true,
+            "description": "Recorded revision whose overrides should be restored."
+          },
+          "expectedRevision": {
+            "type": "string",
+            "format": "int64",
+            "pattern": "^-?[0-9]+$",
+            "x-sdkwork-int64-string": true
+          }
+        }
+      },
+      "AiotDeviceSettingsBulkItemRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "deviceId",
+          "overrides"
+        ],
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "expectedRevision": {
+            "type": "string",
+            "format": "int64",
+            "pattern": "^-?[0-9]+$",
+            "x-sdkwork-int64-string": true
+          },
+          "overrides": {
+            "$ref": "#/components/schemas/AiotDeviceSettingMap"
+          }
+        }
+      },
+      "AiotDeviceSettingsBulkUpdateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "allOrNothing": {
+            "type": "boolean",
+            "default": false
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/AiotDeviceSettingsBulkItemRequest"
+            }
+          }
+        }
+      },
+      "AiotDeviceSettingsBulkItemResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "deviceId",
+          "status"
+        ],
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "updated",
+              "skipped",
+              "invalid",
+              "not_found",
+              "conflict",
+              "failed"
+            ],
+            "description": "updated = written and published; skipped = valid but not written because allOrNothing failed; invalid = schema/type violation; conflict = expectedRevision mismatch; failed = storage failure."
+          },
+          "revision": {
+            "type": "string",
+            "format": "int64",
+            "pattern": "^-?[0-9]+$",
+            "x-sdkwork-int64-string": true
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            }
+          }
+        }
       }
     }
   }

@@ -8,8 +8,8 @@ use sdkwork_aiot_storage_sqlx::{
 use sdkwork_database_config::DatabaseEngine;
 
 use crate::{
-    AiotCatalogRepositoryHandle, AiotCredentialRepository, AiotFirmwareRepositoryHandle,
-    CredentialRepositoryAdapter,
+    AiotCatalogRepositoryHandle, AiotCredentialRepository, AiotDeviceSettingsRepositoryHandle,
+    AiotFirmwareRepositoryHandle, CredentialRepositoryAdapter,
 };
 
 pub struct AiotAppServiceStores {
@@ -22,6 +22,7 @@ pub struct AiotAdminServiceStores {
     pub device_repository: Arc<sdkwork_aiot_storage_sqlx::SqlxDeviceRepository>,
     pub credential_repository: Arc<dyn AiotCredentialRepository>,
     pub catalog_repository: Arc<AiotCatalogRepositoryHandle>,
+    pub device_settings_repository: AiotDeviceSettingsRepositoryHandle,
     pub firmware_repository: Arc<AiotFirmwareRepositoryHandle>,
 }
 
@@ -72,6 +73,9 @@ pub fn open_admin_service_stores(service_label: &str) -> Result<AiotAdminService
         catalog_repository: Arc::new(AiotCatalogRepositoryHandle::from_entity_store(
             entity_store.clone(),
         )),
+        device_settings_repository: AiotDeviceSettingsRepositoryHandle::from_entity_store(
+            entity_store.clone(),
+        ),
         firmware_repository: Arc::new(AiotFirmwareRepositoryHandle::from_entity_store(
             entity_store,
         )),
