@@ -339,6 +339,26 @@ pub trait AiotDeviceRepository: Send + Sync {
     ) -> Option<AiotDeviceRecord> {
         None
     }
+    /// Lists devices visible to a user console: user-owned devices plus
+    /// tenant-provisioned ("device"-owned) assets.
+    fn list_devices_for_user_scope(
+        &self,
+        _association: &AiotStorageAssociation,
+        _user_id: &str,
+        _params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotDeviceRecord>, AiotDeviceRepositoryError> {
+        Err(AiotDeviceRepositoryError::PersistenceFailure)
+    }
+
+    /// Retrieves one device visible to a user console under the same scope.
+    fn get_device_for_user_scope(
+        &self,
+        _association: &AiotStorageAssociation,
+        _user_id: &str,
+        _device_id: &str,
+    ) -> Option<AiotDeviceRecord> {
+        None
+    }
     /// Rollout/batch targeting: returns device ids only, optionally filtered by product, bounded by limit.
     fn list_device_ids_for_rollout(
         &self,
@@ -969,6 +989,46 @@ impl AiotDeviceRepository for InMemoryAiotDeviceRepository {
             .get(&scoped_device_key(association, device_id))
             .filter(|device| {
                 device.owner_type == owner.owner_type && device.owner_id == owner.owner_id
+            })
+            .cloned()
+    }
+    fn list_devices_for_user_scope(
+        &self,
+        association: &AiotStorageAssociation,
+        user_id: &str,
+        params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotDeviceRecord>, AiotDeviceRepositoryError> {
+        let items = self
+            .state
+            .lock()
+            .expect("in-memory device repo poisoned")
+            .devices
+            .values()
+            .filter(|device| {
+                device.tenant_id == association.tenant_id
+                    && device.organization_id == association.organization_id
+                    && (device.owner_type == "device"
+                        || (device.owner_type == "user" && device.owner_id == user_id))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        Ok(paginate_vec(items, params))
+    }
+
+    fn get_device_for_user_scope(
+        &self,
+        association: &AiotStorageAssociation,
+        user_id: &str,
+        device_id: &str,
+    ) -> Option<AiotDeviceRecord> {
+        self.state
+            .lock()
+            .expect("in-memory device repo poisoned")
+            .devices
+            .get(&scoped_device_key(association, device_id))
+            .filter(|device| {
+                device.owner_type == "device"
+                    || (device.owner_type == "user" && device.owner_id == user_id)
             })
             .cloned()
     }

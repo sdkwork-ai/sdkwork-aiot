@@ -3306,3 +3306,53 @@ fn xiaozhi_mcp_tool_invocation_rejects_unknown_tools_and_offline_devices() {
         sdkwork_aiot_device_edge_runtime::XiaozhiToolInvokeError::ToolNotFound
     ));
 }
+
+#[test]
+fn xiaozhi_mcp_tool_invocation_times_out_without_device_response() {
+    let device_id = "dev-mcp-timeout-001";
+    let session_id = "mcp-timeout-session-001";
+    sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_clear_session(session_id);
+    sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_begin_initialize(session_id, 11);
+    let tools_request = sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_on_mcp_message(
+        session_id,
+        "response",
+        None,
+        r#"{"jsonrpc":"2.0","id":11,"result":{}}"#,
+    )
+    .expect("tools/list request");
+    let tools_request_id = extract_json_numeric_id(&tools_request);
+    let tools_response = format!(
+        r#"{{"jsonrpc":"2.0","id":{tools_request_id},"result":{{"tools":[{{"name":"self.audio_speaker.set_volume","description":"Set volume"}}]}}}}"#
+    );
+    assert!(
+        sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_on_mcp_message(
+            session_id,
+            "response",
+            None,
+            &tools_response,
+        )
+        .is_none()
+    );
+
+    let (sender, _receiver) = std::sync::mpsc::channel();
+    sdkwork_aiot_device_edge_runtime::register_active_ws_session(
+        device_id,
+        session_id,
+        sender,
+        Default::default(),
+    );
+    let error = sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_invoke_tool(
+        device_id,
+        session_id,
+        "self.audio_speaker.set_volume",
+        "{}",
+        50,
+    )
+    .expect_err("timeout");
+    assert!(matches!(
+        error,
+        sdkwork_aiot_device_edge_runtime::XiaozhiToolInvokeError::Timeout
+    ));
+    sdkwork_aiot_device_edge_runtime::unregister_active_ws_session(device_id);
+    sdkwork_aiot_device_edge_runtime::xiaozhi_mcp_clear_session(session_id);
+}

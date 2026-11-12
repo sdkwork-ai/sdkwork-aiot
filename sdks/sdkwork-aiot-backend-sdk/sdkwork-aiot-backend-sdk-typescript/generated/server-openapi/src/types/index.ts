@@ -56,6 +56,8 @@ export type { FieldError } from './field-error';
 export type { SdkWorkResourceResponse } from './sdk-work-resource-response';
 export type { SdkWorkListResponse } from './sdk-work-list-response';
 export type { SdkWorkCommandResponse } from './sdk-work-command-response';
+export type { AiotDeviceHardwareToolCallRequest } from './aiot-device-hardware-tool-call-request';
+export type { AiotDeviceHardwareToolCallResult } from './aiot-device-hardware-tool-call-result';
 export type { AiotDeviceHardwareTool } from './aiot-device-hardware-tool';
 export type { AiotDeviceHardwareTools } from './aiot-device-hardware-tools';
 export type { AiotDeviceSettingKind } from './aiot-device-setting-kind';
@@ -99,5 +101,6 @@ export type { RuntimeCapacityRetrieveResponse } from './runtime-capacity-retriev
 export type { DevicesSettingsRetrieveResponse } from './devices-settings-retrieve-response';
 export type { DevicesSettingsUpdateResponse } from './devices-settings-update-response';
 export type { DevicesHardwareToolsListResponse } from './devices-hardware-tools-list-response';
+export type { DevicesHardwareToolsExecuteResponse } from './devices-hardware-tools-execute-response';
 export type { DevicesSettingsRollbackResponse } from './devices-settings-rollback-response';
 export type { DeviceSettingsBulkUpdateResponse } from './device-settings-bulk-update-response';

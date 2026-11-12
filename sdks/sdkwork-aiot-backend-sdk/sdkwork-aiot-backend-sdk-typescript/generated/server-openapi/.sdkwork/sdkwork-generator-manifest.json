@@ -3,7 +3,7 @@
   "generator": "@sdkwork/sdk-generator",
   "sdk": {
     "name": "sdkwork-aiot-backend-sdk",
-    "version": "0.1.16",
+    "version": "0.1.18",
     "language": "typescript",
     "sdkType": "backend",
     "protocol": "http",
@@ -32,7 +32,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "15d73c120c9b2bac226c2bb1bb219f1808f3cc5750ea21d1df583254d46de42e"
+      "sha256": "84f01bb8f0b9df2e1b49abfa014bfd4fd1345a7fcd1af68bb9e08cc2b3d21286"
     },
     {
       "path": "LICENSE",
@@ -40,7 +40,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "c272c76769fbe55b8e8ea3006ad2e35ace9271a058336610c7f0982d629d1a32"
+      "sha256": "dc521438a0c2abfd4ff5f3f95322efbfe102b28957b209e2a681c5fb48500581"
     },
     {
       "path": "README.md",
@@ -48,7 +48,7 @@
     },
     {
       "path": "sdkwork-sdk.json",
-      "sha256": "a9328a87333638d68524e465841c700a884b2c2f21c941622e4f5d8a51ea5ad3"
+      "sha256": "908aee23885c05b5670dcde75e766474ace603efe8b987ec80b330b233221628"
     },
     {
       "path": "src/api/base.ts",
@@ -60,7 +60,7 @@
     },
     {
       "path": "src/api/iot.ts",
-      "sha256": "f5f47c4ad5f64e2ca817b1b8af527570e98652ef46f6bdafd8eba4dc0267da29"
+      "sha256": "48999a60691d3359e90432bbe046e237127da94fdbaf069f4922d143b410562a"
     },
     {
       "path": "src/api/paths.ts",
@@ -129,6 +129,14 @@
     {
       "path": "src/types/aiot-device-create-request.ts",
       "sha256": "f9c0eab5089ddc5110c0d855f05f290390c26f4ebffe280d8042429520e1823d"
+    },
+    {
+      "path": "src/types/aiot-device-hardware-tool-call-request.ts",
+      "sha256": "ffe5337d8119ef3166138e3780982d281b9bcdef68799bf80431dca84d881c54"
+    },
+    {
+      "path": "src/types/aiot-device-hardware-tool-call-result.ts",
+      "sha256": "b9890295c014448a23596648177c558f91227a8cafd0307c0b4710456687df20"
     },
     {
       "path": "src/types/aiot-device-hardware-tool.ts",
@@ -331,6 +339,10 @@
       "sha256": "a71bf24af45d2c065e2eb60d83cbd9b2cb95a12b26dbf77870080b88a797155d"
     },
     {
+      "path": "src/types/devices-hardware-tools-execute-response.ts",
+      "sha256": "e1e1391f450be11aad4a33211fdb4d20af0dac054b2eb76eea21014412a25333"
+    },
+    {
       "path": "src/types/devices-hardware-tools-list-response.ts",
       "sha256": "012109f3caf36bd107475c745d964e7de250654766a8f6a014289cb61eec3b09"
     },
@@ -404,7 +416,7 @@
     },
     {
       "path": "src/types/index.ts",
-      "sha256": "e7c5322199d7c800066027547a864400577236c92f035cbf46a389b4104399b6"
+      "sha256": "961efc130d7868ee245d0c98e56d85b0463fe369cad664886f7bc4745d13768b"
     },
     {
       "path": "src/types/json-value.ts",

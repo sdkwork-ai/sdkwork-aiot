@@ -412,6 +412,46 @@ impl AiotDeviceRepository for InMemorySqlxDeviceRepository {
             })
             .cloned()
     }
+    fn list_devices_for_user_scope(
+        &self,
+        association: &AiotStorageAssociation,
+        user_id: &str,
+        params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotDeviceRecord>, AiotDeviceRepositoryError> {
+        let items = self
+            .state
+            .lock()
+            .expect("sqlx device repo state poisoned")
+            .devices
+            .values()
+            .filter(|device| {
+                device.tenant_id == association.tenant_id
+                    && device.organization_id == association.organization_id
+                    && (device.owner_type == "device"
+                        || (device.owner_type == "user" && device.owner_id == user_id))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        Ok(paginate_vec(items, params))
+    }
+
+    fn get_device_for_user_scope(
+        &self,
+        association: &AiotStorageAssociation,
+        user_id: &str,
+        device_id: &str,
+    ) -> Option<AiotDeviceRecord> {
+        self.state
+            .lock()
+            .expect("sqlx device repo state poisoned")
+            .devices
+            .get(&scoped_device_key(association, device_id))
+            .filter(|device| {
+                device.owner_type == "device"
+                    || (device.owner_type == "user" && device.owner_id == user_id)
+            })
+            .cloned()
+    }
 
     fn list_device_ids_for_rollout(
         &self,

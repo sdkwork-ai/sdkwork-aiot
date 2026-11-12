@@ -10,8 +10,10 @@ import {
   mapAdminDeviceSettings,
   hardwareToolParameters,
   mapBulkResult,
+  mapHardwareToolInvocation,
   mapHardwareTools,
   mapSettingsHistoryEntry,
+  parseHardwareToolArguments,
   mapSettingsHistoryPage,
   parseSettingInput,
   summarizeBulkResult,
@@ -290,5 +292,24 @@ describe("admin settings parsing and validation", () => {
     expect(catalog.online).toBe(false);
     expect(catalog.discovered).toBe(false);
     expect(catalog.tools).toEqual([]);
+  });
+
+  it("maps tool invocation results and validates argument JSON", () => {
+    const invocation = mapHardwareToolInvocation(
+      { result: { content: [] }, toolName: "self.camera.take_photo" },
+      "device-1",
+      "fallback.tool",
+    );
+    expect(invocation.deviceId).toBe("device-1");
+    expect(invocation.toolName).toBe("self.camera.take_photo");
+    expect(invocation.result).toEqual({ content: [] });
+
+    expect(parseHardwareToolArguments("")).toEqual({ ok: true, value: {} });
+    expect(parseHardwareToolArguments('{"volume":30}')).toEqual({
+      ok: true,
+      value: { volume: 30 },
+    });
+    expect(parseHardwareToolArguments("[1,2]").ok).toBe(false);
+    expect(parseHardwareToolArguments("{bad").ok).toBe(false);
   });
 });

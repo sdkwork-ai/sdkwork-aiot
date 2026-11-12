@@ -435,8 +435,21 @@ fn resolve_protected_context_from_proxy_headers(
 
     let mut ctx = AiotRequestContext::new(tenant_id, organization_id);
 
-    if let Some(user_id) = optional_header(request, "x-sdkwork-user-id") {
-        parse_i64(user_id).map_err(|_| {
+    let user_id = optional_header(request, "x-sdkwork-user-id")
+        .map(str::to_string)
+        .or_else(|| {
+            // Local/dev proxy requests may omit the user header; production requests
+            // must always carry it so tenant data is never exposed without a user.
+            dev_mode_enabled().then(|| {
+                std::env::var("SDKWORK_AIOT_DEV_USER_ID")
+                    .ok()
+                    .map(|value| value.trim().to_string())
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or_else(|| "30001".to_string())
+            })
+        });
+    if let Some(user_id) = user_id {
+        parse_i64(&user_id).map_err(|_| {
             problem_response(
                 HttpStatus::BadRequest,
                 "api.context.invalid_user_id",
@@ -1220,8 +1233,8 @@ pub fn standard_api_route_contracts() -> Vec<AiotApiRouteContract> {
         AiotApiRouteContract {
             surface: AiotApiSurface::Admin,
             method: "POST",
-            path: "/backend/v3/api/iot/devices/{deviceId}/hardware_tool_calls",
-            operation_id: "devices.hardwareTools.invoke",
+            path: "/backend/v3/api/iot/devices/{deviceId}/hardware_tool_calls/execute",
+            operation_id: "devices.hardwareTools.execute",
             required_permission: IOT_PERMISSION_COMMANDS_EXECUTE,
         },
         AiotApiRouteContract {
@@ -2019,7 +2032,7 @@ impl AiotApiServer {
         let association = request_context_to_storage_association(context)?;
         let owner = Self::owner_scope_for_context(context)?;
         self.device_repository
-            .list_devices_by_owner(&association, &owner, params)
+            .list_devices_for_user_scope(&association, &owner.owner_id, params)
             .map_err(device_repository_error_to_response)
     }
 
@@ -2056,8 +2069,18 @@ impl AiotApiServer {
     ) -> Result<AiotDeviceRecord, HttpResponse> {
         let association = request_context_to_storage_association(context)?;
         let owner = Self::owner_scope_for_context(context)?;
+        if let Some(device) =
+            self.device_repository
+                .get_device_by_owner(&association, &owner, device_id)
+        {
+            return Ok(device);
+        }
+        // Tenant administrators provision devices under the tenant-owned
+        // ("device") relation. The user console may read those tenant assets,
+        // but never devices owned by another user.
         self.device_repository
-            .get_device_by_owner(&association, &owner, device_id)
+            .get_device(&association, device_id)
+            .filter(|device| device.owner_type == "device")
             .ok_or_else(|| device_not_found_response(device_id))
     }
 
@@ -2074,10 +2097,11 @@ impl AiotApiServer {
     ) -> Result<AiotDeviceRecord, HttpResponse> {
         let association = request_context_to_storage_association(context)?;
         let owner = Self::owner_scope_for_context(context)?;
-        let Some(_) = self
-            .device_repository
-            .get_device_by_owner(&association, &owner, device_id)
-        else {
+        let Some(_) = self.device_repository.get_device_for_user_scope(
+            &association,
+            &owner.owner_id,
+            device_id,
+        ) else {
             return Err(device_not_found_response(device_id));
         };
 
@@ -3973,7 +3997,7 @@ pub fn handle_resolved_api_request(
                 ),
             }
         }
-        (AiotApiSurface::Admin, "devices.hardwareTools.invoke") => {
+        (AiotApiSurface::Admin, "devices.hardwareTools.execute") => {
             let Some(context) = request_context else {
                 return problem_response(
                     HttpStatus::Forbidden,
@@ -4021,6 +4045,13 @@ pub fn handle_resolved_api_request(
                         "result": result,
                     })
                     .to_string(),
+                ),
+                Err(AiotDeviceHardwareToolError::Busy(detail)) => problem_detail_with_errors(
+                    request,
+                    HttpStatus::TooManyRequests,
+                    SdkWorkResultCode::RateLimitExceeded,
+                    detail,
+                    &serde_json::json!([]),
                 ),
                 Err(AiotDeviceHardwareToolError::NotFound(detail)) => problem_detail_from_request(
                     request,

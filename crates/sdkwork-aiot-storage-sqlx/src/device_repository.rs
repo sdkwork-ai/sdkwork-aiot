@@ -615,6 +615,119 @@ impl AiotDeviceRepository for SqlxDeviceRepository {
             .flatten()
     }
 
+    fn list_devices_for_user_scope(
+        &self,
+        association: &AiotStorageAssociation,
+        user_id: &str,
+        params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotDeviceRecord>, AiotDeviceRepositoryError> {
+        let association = association.clone();
+        let user_id = user_id.to_string();
+        self.db
+            .run_owned(|pool| async move {
+                let count_sql = pool.adapt_sql(
+                    "SELECT COUNT(1) FROM iot_device WHERE tenant_id = ?1 AND organization_id = ?2 AND (owner_type = 'device' OR (owner_type = 'user' AND owner_id = ?3))",
+                );
+                let list_sql = pool.adapt_sql(
+                    "SELECT id, tenant_id, organization_id, owner_type, owner_id, device_id, display_name, product_id, client_id, chip_family, status, metadata, last_seen_at FROM iot_device WHERE tenant_id = ?1 AND organization_id = ?2 AND (owner_type = 'device' OR (owner_type = 'user' AND owner_id = ?3)) ORDER BY id ASC LIMIT ?4 OFFSET ?5",
+                );
+                let limit = params.page_size.max(1);
+                let offset = params.offset.max(0);
+                match pool.engine() {
+                    DeviceDatabaseEngine::Sqlite => {
+                        let total: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(count_sql.as_str()))
+                            .bind(association.tenant_id)
+                            .bind(association.organization_id)
+                            .bind(&user_id)
+                            .fetch_one(pool.sqlite_pool().expect("sqlite pool"))
+                            .await?;
+                        let rows = sqlx::query(sqlx::AssertSqlSafe(list_sql.as_str()))
+                            .bind(association.tenant_id)
+                            .bind(association.organization_id)
+                            .bind(&user_id)
+                            .bind(limit)
+                            .bind(offset)
+                            .fetch_all(pool.sqlite_pool().expect("sqlite pool"))
+                            .await?;
+                        Ok::<AiotOffsetListResult<AiotDeviceRecord>, sqlx::Error>(AiotOffsetListResult {
+                            items: rows
+                                .iter()
+                                .filter_map(|row| row_to_device_record(row).ok())
+                                .collect(),
+                            total,
+                        })
+                    }
+                    DeviceDatabaseEngine::Postgres => {
+                        let total: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(count_sql.as_str()))
+                            .bind(association.tenant_id)
+                            .bind(association.organization_id)
+                            .bind(&user_id)
+                            .fetch_one(pool.postgres_pool().expect("postgres pool"))
+                            .await?;
+                        let rows = sqlx::query(sqlx::AssertSqlSafe(list_sql.as_str()))
+                            .bind(association.tenant_id)
+                            .bind(association.organization_id)
+                            .bind(&user_id)
+                            .bind(limit)
+                            .bind(offset)
+                            .fetch_all(pool.postgres_pool().expect("postgres pool"))
+                            .await?;
+                        Ok(AiotOffsetListResult {
+                            items: rows
+                                .iter()
+                                .filter_map(|row| row_to_device_record_postgres(row).ok())
+                                .collect(),
+                            total,
+                        })
+                    }
+                }
+            })
+            .map_err(map_device_sql_error)
+    }
+
+    fn get_device_for_user_scope(
+        &self,
+        association: &AiotStorageAssociation,
+        user_id: &str,
+        device_id: &str,
+    ) -> Option<AiotDeviceRecord> {
+        let association = association.clone();
+        let user_id = user_id.to_string();
+        let device_id = device_id.to_string();
+        self.db
+            .run_owned(|pool| async move {
+                let sql = pool.adapt_sql(
+                    "SELECT id, tenant_id, organization_id, owner_type, owner_id, device_id, display_name, product_id, client_id, chip_family, status, metadata, last_seen_at FROM iot_device WHERE tenant_id = ?1 AND organization_id = ?2 AND (owner_type = 'device' OR (owner_type = 'user' AND owner_id = ?3)) AND device_id = ?4 LIMIT 1",
+                );
+                match pool.engine() {
+                    DeviceDatabaseEngine::Sqlite => {
+                        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+                            .bind(association.tenant_id)
+                            .bind(association.organization_id)
+                            .bind(&user_id)
+                            .bind(&device_id)
+                            .fetch_optional(pool.sqlite_pool().expect("sqlite pool"))
+                            .await?;
+                        row.as_ref().map(row_to_device_record).transpose()
+                    }
+                    DeviceDatabaseEngine::Postgres => {
+                        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+                            .bind(association.tenant_id)
+                            .bind(association.organization_id)
+                            .bind(&user_id)
+                            .bind(&device_id)
+                            .fetch_optional(pool.postgres_pool().expect("postgres pool"))
+                            .await?;
+                        row.as_ref()
+                            .map(row_to_device_record_postgres)
+                            .transpose()
+                    }
+                }
+            })
+            .ok()
+            .flatten()
+    }
+
     fn list_device_ids_for_rollout(
         &self,
         association: &AiotStorageAssociation,

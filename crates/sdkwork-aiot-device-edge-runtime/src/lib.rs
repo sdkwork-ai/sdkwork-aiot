@@ -1,5 +1,6 @@
 mod active_ws_sessions;
 mod command_delivery_worker;
+mod embedded_server;
 mod mqtt_bridge_readiness;
 mod xiaozhi_mcp_catalog;
 mod xiaozhi_mcp_invoke;
@@ -7,9 +8,13 @@ mod xiaozhi_ws_media_session;
 
 pub use active_ws_sessions::{
     active_ws_session_id, active_ws_sessions, register_active_ws_session, touch_active_ws_session,
-    unregister_active_ws_session,
+    unregister_active_ws_session, unregister_active_ws_session_if,
 };
 pub use command_delivery_worker::start_command_delivery_worker;
+pub use embedded_server::{
+    spawn_device_edge_runtime, spawn_device_edge_runtime_from_env, DeviceEdgeRuntimeConfig,
+    DeviceEdgeRuntimeHandle,
+};
 pub use mqtt_bridge_readiness::{
     mqtt_bridge_health_status, mqtt_bridge_readiness_probe, MqttBridgeRuntimeSnapshot,
     MqttBridgeRuntimeState, ENV_MQTT_BRIDGE_ENABLE,

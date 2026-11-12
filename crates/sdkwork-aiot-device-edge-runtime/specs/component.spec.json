@@ -77,6 +77,8 @@
     ],
     "runtimeEntrypoints": [
       "src/main.rs",
+      "spawn_device_edge_runtime",
+      "spawn_device_edge_runtime_from_env",
       "standard_device_edge_server",
       "standard_device_edge_server_and_session_options"
     ],

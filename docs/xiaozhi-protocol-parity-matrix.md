@@ -126,6 +126,22 @@ git submodule update --init external/xiaozhi-esp32
   ASR/LLM/TTS instead of discarding it. `detect` (wake word) no longer becomes a
   user prompt in production, and `abort` clears buffered uplink audio.
 
+- Server-initiated `tools/call` is implemented for WebSocket sessions: the
+  admin invokes `/backend/v3/api/iot/devices/{deviceId}/hardware_tool_calls/execute`, the
+  edge runtime correlates the device JSON-RPC response with a bounded wait, and
+  only one call per device may be in flight. MQTT+UDP sessions remain
+  discovery-only for tool invocation.
+
+## Gateway Embedding
+
+The device edge runtime is embeddable: `sdkwork-aiot-device-edge-runtime` exposes
+`spawn_device_edge_runtime(DeviceEdgeRuntimeConfig)` and returns a
+`DeviceEdgeRuntimeHandle` for host-driven shutdown. `sdkwork-api-cloud-gateway`
+uses it through the `foundation-aiot-realtime` Cargo feature and the
+`[aiotRealtime]` runtime section, so one gateway process owns the gateway HTTP
+listener plus the AIoT HTTP/WebSocket (TCP) ingress, UDP media bridge and MQTT
+bridge. See the gateway `docs/architecture/tech/TECH_ARCHITECTURE.md` §7.2.
+
 ## Open Gaps (Next Iteration)
 
 1. Distributed bridge rate limits and richer trace hooks (control plane exists; advanced backpressure optional).

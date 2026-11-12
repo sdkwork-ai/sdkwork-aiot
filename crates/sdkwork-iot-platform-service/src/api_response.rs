@@ -26,7 +26,7 @@ pub fn aiot_wire_code_to_result(wire_code: &str) -> SdkWorkResultCode {
         }
         "api.auth.rate_limited" => SdkWorkResultCode::RateLimitExceeded,
         "api.permission.denied" => SdkWorkResultCode::PermissionRequired,
-        "api.context.missing" => SdkWorkResultCode::PermissionRequired,
+        "api.context.missing" | "api.context.user.missing" => SdkWorkResultCode::PermissionRequired,
         "api.context.invalid_tenant_id"
         | "api.context.invalid_organization_id"
         | "api.context.invalid_user_id"

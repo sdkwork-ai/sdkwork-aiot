@@ -3,7 +3,7 @@
   "generator": "@sdkwork/sdk-generator",
   "sdk": {
     "name": "sdkwork-aiot-app-sdk",
-    "version": "0.1.17",
+    "version": "0.1.19",
     "language": "typescript",
     "sdkType": "app",
     "protocol": "http",
@@ -32,7 +32,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "865b942379db67a71f530b59a3aa785cf23a9354383cded90a43ee1525a38617"
+      "sha256": "3a1c94a31d418ddb3c23c50c027845f69c5c34620ce55ce7b567339374ed97c1"
     },
     {
       "path": "LICENSE",
@@ -40,7 +40,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "549692469c5f40fc48ff91ae63f39efc6c715f570694c094bcd513fbe7b0a451"
+      "sha256": "3171590f95ac0a2edd6227b586bb4c1bb3dc52023926c1653827f98725dfcf6a"
     },
     {
       "path": "README.md",
@@ -48,7 +48,7 @@
     },
     {
       "path": "sdkwork-sdk.json",
-      "sha256": "10c8a4b70fad736dc61a28afb538ea83c210c5f208954b4be1dc1b174297be88"
+      "sha256": "9e49c9f01e4b072bb305ea0dd1195c9b3f662ede144238ad3122163494d3b90f"
     },
     {
       "path": "src/api/base.ts",

@@ -2,12 +2,14 @@ import { useMemo, useSyncExternalStore } from "react";
 
 import {
   countOverrides,
+  parseHardwareToolArguments,
   summarizeBulkResult,
   validateSettingsDraft,
   type SdkworkAdminBulkResult,
   type SdkworkAdminDevice,
   type SdkworkAdminDeviceHealth,
   type SdkworkAdminDeviceSettings,
+  type SdkworkAdminHardwareToolInvocation,
   type SdkworkAdminHardwareTools,
   type SdkworkAdminSettingsHistoryEntry,
 } from "./admin";
@@ -26,8 +28,12 @@ export interface SdkworkAdminControllerState {
   draftErrors: Record<string, string>;
   draftOverrides: Record<string, unknown>;
   healthFilter: SdkworkAdminDeviceHealth | "all";
+  hardwareToolError?: string;
+  hardwareToolInvocation: SdkworkAdminHardwareToolInvocation | null;
+  hardwareToolNotice?: string;
   hardwareTools: SdkworkAdminHardwareTools | null;
   hardwareToolsError?: string;
+  invokingHardwareTool?: string;
   history: SdkworkAdminSettingsHistoryEntry[];
   isApplyingBulk: boolean;
   isBootstrapped: boolean;
@@ -55,6 +61,7 @@ export interface SdkworkAdminController {
   loadSettingsHistory(): Promise<void>;
   refreshDevices(input?: GetSdkworkAdminDevicesInput): Promise<SdkworkAdminControllerState>;
   refreshHardwareTools(): Promise<void>;
+  invokeHardwareTool(toolName: string, argumentsText: string): Promise<boolean>;
   resetToDefaults(): Promise<boolean>;
   rollbackSettings(targetRevision: string): Promise<boolean>;
   save(): Promise<boolean>;
@@ -119,6 +126,7 @@ function emptyState(): SdkworkAdminControllerState {
     draftErrors: {},
     draftOverrides: {},
     healthFilter: "all",
+    hardwareToolInvocation: null,
     hardwareTools: null,
     history: [],
     isApplyingBulk: false,
@@ -192,6 +200,9 @@ export function createSdkworkAdminController(
 
   async function loadHardwareTools(deviceId: string): Promise<void> {
     setState({
+      hardwareToolError: undefined,
+      hardwareToolInvocation: null,
+      hardwareToolNotice: undefined,
       hardwareTools: null,
       hardwareToolsError: undefined,
       isLoadingHardwareTools: true,
@@ -327,6 +338,45 @@ export function createSdkworkAdminController(
       return this.bootstrap(input);
     },
 
+    async invokeHardwareTool(toolName, argumentsText) {
+      const deviceId = state.selectedDeviceId;
+      if (!deviceId) {
+        return false;
+      }
+      const parsed = parseHardwareToolArguments(argumentsText);
+      if (!parsed.ok) {
+        setState({
+          hardwareToolError: parsed.error,
+          hardwareToolNotice: undefined,
+        });
+        return false;
+      }
+      setState({
+        hardwareToolError: undefined,
+        hardwareToolNotice: undefined,
+        invokingHardwareTool: toolName,
+      });
+      try {
+        const invocation = await service.invokeHardwareTool(
+          deviceId,
+          toolName,
+          parsed.value,
+        );
+        setState({
+          hardwareToolInvocation: invocation,
+          hardwareToolNotice: `${toolName} 调用完成`,
+          invokingHardwareTool: undefined,
+        });
+        return true;
+      } catch (error) {
+        setState({
+          hardwareToolError: describeAdminServiceError(error),
+          invokingHardwareTool: undefined,
+        });
+        return false;
+      }
+    },
+
     async refreshHardwareTools() {
       if (state.selectedDeviceId) {
         await loadHardwareTools(state.selectedDeviceId);
@@ -454,6 +504,9 @@ export function createSdkworkAdminController(
       setState({
         draftErrors: {},
         draftOverrides: {},
+        hardwareToolError: undefined,
+        hardwareToolInvocation: null,
+        hardwareToolNotice: undefined,
         hardwareTools: null,
         hardwareToolsError: undefined,
         history: [],

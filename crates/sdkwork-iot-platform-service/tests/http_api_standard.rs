@@ -89,7 +89,7 @@ fn app_api_server_exposes_safe_device_collection_boundary() {
     )
     .expect("device list");
 
-    assert!(response.starts_with("HTTP/1.1 200"));
+    assert!(response.starts_with("HTTP/1.1 200"), "{response}");
     assert!(response.contains(r#""code":0"#));
     assert!(response.contains(r#""data":{"items":[]"#));
 }
@@ -4553,6 +4553,11 @@ impl sdkwork_iot_platform_service::AiotDeviceHardwareToolSource for StubHardware
                     "device timed out".to_string(),
                 ),
             ),
+            "self.busy.tool" => Err(
+                sdkwork_iot_platform_service::AiotDeviceHardwareToolError::Busy(
+                    "another call is in flight".to_string(),
+                ),
+            ),
             _ => Err(
                 sdkwork_iot_platform_service::AiotDeviceHardwareToolError::DeviceError(
                     "device returned an error".to_string(),
@@ -4749,7 +4754,7 @@ fn backend_device_hardware_tool_invocation_returns_device_result() {
 
     let invoked = handle_api_request_bytes(
         &admin,
-        b"POST /backend/v3/api/iot/devices/hardware-invoke-001/hardware_tool_calls HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.commands.execute\r\n\r\n{\"toolName\":\"self.audio_speaker.set_volume\",\"arguments\":{\"volume\":30}}",
+        b"POST /backend/v3/api/iot/devices/hardware-invoke-001/hardware_tool_calls/execute HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.commands.execute\r\n\r\n{\"toolName\":\"self.audio_speaker.set_volume\",\"arguments\":{\"volume\":30}}",
     )
     .expect("invoke hardware tool");
     assert!(invoked.starts_with("HTTP/1.1 200"));
@@ -4777,7 +4782,7 @@ fn backend_device_hardware_tool_invocation_returns_device_result() {
 
     let missing_tool = handle_api_request_bytes(
         &admin,
-        b"POST /backend/v3/api/iot/devices/hardware-invoke-001/hardware_tool_calls HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.commands.execute\r\n\r\n{\"toolName\":\"self.camera.take_photo\"}",
+        b"POST /backend/v3/api/iot/devices/hardware-invoke-001/hardware_tool_calls/execute HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.commands.execute\r\n\r\n{\"toolName\":\"self.camera.take_photo\"}",
     )
     .expect("missing tool invocation");
     assert!(missing_tool.starts_with("HTTP/1.1 404"));
@@ -4785,29 +4790,36 @@ fn backend_device_hardware_tool_invocation_returns_device_result() {
 
     let timeout = handle_api_request_bytes(
         &admin,
-        b"POST /backend/v3/api/iot/devices/hardware-invoke-001/hardware_tool_calls HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.commands.execute\r\n\r\n{\"toolName\":\"self.slow.tool\"}",
+        b"POST /backend/v3/api/iot/devices/hardware-invoke-001/hardware_tool_calls/execute HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.commands.execute\r\n\r\n{\"toolName\":\"self.slow.tool\"}",
     )
     .expect("timeout invocation");
     assert!(timeout.starts_with("HTTP/1.1 503"));
     assert_problem_contains_code(&timeout, SdkWorkResultCode::ServiceUnavailable);
 
+    let busy = handle_api_request_bytes(
+        &admin,
+        b"POST /backend/v3/api/iot/devices/hardware-invoke-001/hardware_tool_calls/execute HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.commands.execute\r\n\r\n{\"toolName\":\"self.busy.tool\"}",
+    )
+    .expect("busy invocation");
+    assert!(busy.starts_with("HTTP/1.1 429"));
+
     let invalid_arguments = handle_api_request_bytes(
         &admin,
-        b"POST /backend/v3/api/iot/devices/hardware-invoke-001/hardware_tool_calls HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.commands.execute\r\n\r\n{\"toolName\":\"self.audio_speaker.set_volume\",\"arguments\":[1,2]}",
+        b"POST /backend/v3/api/iot/devices/hardware-invoke-001/hardware_tool_calls/execute HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.commands.execute\r\n\r\n{\"toolName\":\"self.audio_speaker.set_volume\",\"arguments\":[1,2]}",
     )
     .expect("invalid arguments invocation");
     assert!(invalid_arguments.starts_with("HTTP/1.1 422"));
 
     let missing_name = handle_api_request_bytes(
         &admin,
-        b"POST /backend/v3/api/iot/devices/hardware-invoke-001/hardware_tool_calls HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.commands.execute\r\n\r\n{}",
+        b"POST /backend/v3/api/iot/devices/hardware-invoke-001/hardware_tool_calls/execute HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.commands.execute\r\n\r\n{}",
     )
     .expect("missing tool name invocation");
     assert!(missing_name.starts_with("HTTP/1.1 400"));
 
     let forbidden = handle_api_request_bytes(
         &admin,
-        b"POST /backend/v3/api/iot/devices/hardware-invoke-001/hardware_tool_calls HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.read\r\n\r\n{\"toolName\":\"self.audio_speaker.set_volume\"}",
+        b"POST /backend/v3/api/iot/devices/hardware-invoke-001/hardware_tool_calls/execute HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\nAuthorization: Bearer app-token\r\nAccess-Token: user-token\r\nX-Sdkwork-Tenant-Id: 100001\r\nX-Sdkwork-Organization-Id: 0\r\nX-Sdkwork-Permission-Scope: iot.devices.read\r\n\r\n{\"toolName\":\"self.audio_speaker.set_volume\"}",
     )
     .expect("forbidden invocation");
     assert!(forbidden.starts_with("HTTP/1.1 403"));

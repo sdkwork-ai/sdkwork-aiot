@@ -4,7 +4,7 @@
 //! then waits for the device's correlated `response`/`error` frame. The wait is
 //! bounded so an unresponsive device cannot pin an admin request thread.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{mpsc, Mutex, OnceLock};
 use std::time::Duration;
 
@@ -19,6 +19,7 @@ pub const MAX_TOOL_INVOKE_TIMEOUT_MS: u64 = 30_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum XiaozhiToolInvokeError {
+    Busy,
     Offline,
     ToolNotFound,
     Timeout,
@@ -30,6 +31,7 @@ pub enum XiaozhiToolInvokeError {
 impl XiaozhiToolInvokeError {
     pub fn code(&self) -> &'static str {
         match self {
+            Self::Busy => "iot.xiaozhi.mcp_tool.busy",
             Self::Offline => "iot.xiaozhi.mcp_tool.offline",
             Self::ToolNotFound => "iot.xiaozhi.mcp_tool.not_found",
             Self::Timeout => "iot.xiaozhi.mcp_tool.timeout",
@@ -41,6 +43,7 @@ impl XiaozhiToolInvokeError {
 
     pub fn detail(&self) -> String {
         match self {
+            Self::Busy => "another MCP tool call is already in flight for this device".to_string(),
             Self::Offline => "device has no active protocol session".to_string(),
             Self::ToolNotFound => "device did not expose the requested MCP tool".to_string(),
             Self::Timeout => "device did not answer the MCP tool call in time".to_string(),
@@ -51,14 +54,42 @@ impl XiaozhiToolInvokeError {
     }
 }
 
-fn pending() -> &'static Mutex<HashMap<String, mpsc::Sender<Result<Value, String>>>> {
-    static PENDING: OnceLock<Mutex<HashMap<String, mpsc::Sender<Result<Value, String>>>>> =
-        OnceLock::new();
+type PendingToolCalls = Mutex<HashMap<String, mpsc::Sender<Result<Value, String>>>>;
+
+fn pending() -> &'static PendingToolCalls {
+    static PENDING: OnceLock<PendingToolCalls> = OnceLock::new();
     PENDING.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn pending_key(device_id: &str, request_id: &str) -> String {
     format!("{device_id}:{request_id}")
+}
+
+fn in_flight() -> &'static Mutex<HashSet<String>> {
+    static IN_FLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    IN_FLIGHT.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+struct InFlightGuard {
+    device_id: String,
+}
+
+impl Drop for InFlightGuard {
+    fn drop(&mut self) {
+        if let Ok(mut guard) = in_flight().lock() {
+            guard.remove(&self.device_id);
+        }
+    }
+}
+
+fn acquire_in_flight(device_id: &str) -> Option<InFlightGuard> {
+    let mut guard = in_flight().lock().ok()?;
+    if !guard.insert(device_id.to_string()) {
+        return None;
+    }
+    Some(InFlightGuard {
+        device_id: device_id.to_string(),
+    })
 }
 
 /// Invokes one MCP tool on the device and waits for its JSON-RPC response.
@@ -88,6 +119,10 @@ pub fn invoke_tool(
     if !tools.iter().any(|tool| tool.name == tool_name) {
         return Err(XiaozhiToolInvokeError::ToolNotFound);
     }
+
+    let Some(_in_flight_guard) = acquire_in_flight(device_id) else {
+        return Err(XiaozhiToolInvokeError::Busy);
+    };
 
     let request_id = next_request_id();
     let key = pending_key(device_id, &request_id.to_string());

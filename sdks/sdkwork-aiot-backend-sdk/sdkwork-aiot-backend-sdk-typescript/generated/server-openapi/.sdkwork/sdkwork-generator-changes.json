@@ -3,19 +3,23 @@
   "generator": "@sdkwork/sdk-generator",
   "sdk": {
     "name": "sdkwork-aiot-backend-sdk",
-    "version": "0.1.16",
+    "version": "0.1.18",
     "language": "typescript",
     "sdkType": "backend",
     "protocol": "http",
     "packageName": "@sdkwork/aiot-backend-sdk"
   },
-  "changeFingerprint": "a0784ad088c5e2cc41859bc94e9e8605927fa4ba056ba375ae6aaac1fb105c4a",
+  "changeFingerprint": "e839673d7234d794172b5b51004a0a798d0ed5f9312560f403832d9681818fdf",
   "changes": {
-    "createdGeneratedFiles": [],
+    "createdGeneratedFiles": [
+      "src/types/devices-hardware-tools-execute-response.ts"
+    ],
     "updatedGeneratedFiles": [
       "CHANGELOG.md",
       "package.json",
-      "sdkwork-sdk.json"
+      "sdkwork-sdk.json",
+      "src/api/iot.ts",
+      "src/types/index.ts"
     ],
     "unchangedGeneratedFiles": [
       "bin/publish-core.mjs",
@@ -27,7 +31,6 @@
       "README.md",
       "src/api/base.ts",
       "src/api/index.ts",
-      "src/api/iot.ts",
       "src/api/paths.ts",
       "src/auth/index.ts",
       "src/http/client.ts",
@@ -45,6 +48,8 @@
       "src/types/aiot-credential-response.ts",
       "src/types/aiot-device-auth-mode.ts",
       "src/types/aiot-device-create-request.ts",
+      "src/types/aiot-device-hardware-tool-call-request.ts",
+      "src/types/aiot-device-hardware-tool-call-result.ts",
       "src/types/aiot-device-hardware-tool.ts",
       "src/types/aiot-device-hardware-tools.ts",
       "src/types/aiot-device-setting-definition.ts",
@@ -113,7 +118,6 @@
       "src/types/hardware-profiles-create-response201.ts",
       "src/types/hardware-profiles-retrieve-response.ts",
       "src/types/hardware-profiles-update-response.ts",
-      "src/types/index.ts",
       "src/types/json-value.ts",
       "src/types/media-access.ts",
       "src/types/media-ai-provenance.ts",
@@ -140,7 +144,9 @@
       "src/types/sdk-work-resource-response.ts",
       "tsconfig.json"
     ],
-    "deletedGeneratedFiles": [],
+    "deletedGeneratedFiles": [
+      "src/types/devices-hardware-tools-invoke-response.ts"
+    ],
     "scaffoldedFiles": [],
     "preservedScaffoldFiles": [
       "custom/build-runtime.mjs",
@@ -151,10 +157,26 @@
   "impact": {
     "schemaVersion": 1,
     "areas": [
+      "api-surface",
+      "models",
       "build-metadata",
       "documentation"
     ],
     "details": [
+      {
+        "area": "api-surface",
+        "paths": [
+          "src/api/iot.ts"
+        ]
+      },
+      {
+        "area": "models",
+        "paths": [
+          "src/types/devices-hardware-tools-execute-response.ts",
+          "src/types/devices-hardware-tools-invoke-response.ts",
+          "src/types/index.ts"
+        ]
+      },
       {
         "area": "build-metadata",
         "paths": [
@@ -170,18 +192,18 @@
       }
     ],
     "requiresVerification": true,
-    "summary": "Detected impact areas: build-metadata, documentation. Verification is required."
+    "summary": "Detected impact areas: api-surface, models, build-metadata, documentation. Verification is required."
   },
   "verificationPlan": {
     "shouldRun": true,
     "runPhase": "now",
-    "summary": "Detected impact areas: build-metadata, documentation. Verification is required. Run the required verification commands now against the generated SDK output.",
+    "summary": "Detected impact areas: api-surface, models, build-metadata, documentation. Verification is required. Run the required verification commands now against the generated SDK output.",
     "steps": [
       {
         "id": "check",
         "title": "Unified package check",
         "required": true,
-        "rationale": "Validate the generated package with the unified publish helper. Triggered by: build-metadata, documentation.",
+        "rationale": "Validate the generated package with the unified publish helper. Triggered by: api-surface, models, build-metadata, documentation.",
         "workingDirectory": "D:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-backend-sdk\\sdkwork-aiot-backend-sdk-typescript\\generated\\server-openapi",
         "command": "node",
         "args": [
@@ -199,7 +221,7 @@
         "id": "build",
         "title": "Unified package build",
         "required": true,
-        "rationale": "Run the full package build because this language uses a lighter check path than the final build. Triggered by: build-metadata, documentation.",
+        "rationale": "Run the full package build because this language uses a lighter check path than the final build. Triggered by: api-surface, models, build-metadata, documentation.",
         "workingDirectory": "D:\\sdkwork-space\\sdkwork-aiot\\sdks\\sdkwork-aiot-backend-sdk\\sdkwork-aiot-backend-sdk-typescript\\generated\\server-openapi",
         "command": "node",
         "args": [
@@ -217,12 +239,14 @@
   },
   "executionDecision": {
     "schemaVersion": 1,
-    "riskLevel": "medium",
+    "riskLevel": "high",
     "nextAction": "verify",
     "requiresManualReview": false,
     "applyRequiresExpectedFingerprint": false,
     "summary": "Changes have been applied. Run the required verification plan now.",
     "reasons": [
+      "deleted-generated-files",
+      "manual-review-required",
       "verification-required"
     ]
   },

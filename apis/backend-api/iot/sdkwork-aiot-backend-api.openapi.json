@@ -3209,7 +3209,7 @@
         }
       }
     },
-    "/backend/v3/api/iot/devices/{deviceId}/hardware_tool_calls": {
+    "/backend/v3/api/iot/devices/{deviceId}/hardware_tool_calls/execute": {
       "post": {
         "tags": [
           "iot"
@@ -3229,7 +3229,7 @@
         "x-sdkwork-api-surface": "backend-api",
         "x-sdkwork-owner": "sdkwork-aiot",
         "x-sdkwork-api-authority": "sdkwork-aiot-backend-api",
-        "operationId": "devices.hardwareTools.invoke",
+        "operationId": "devices.hardwareTools.execute",
         "x-sdkwork-required-permission": "iot.commands.execute",
         "summary": "Invoke one MCP hardware tool on a device",
         "description": "Calls one MCP tool exposed by the device's live Xiaozhi session and returns the device JSON-RPC result. The call is bounded by the edge runtime timeout.",

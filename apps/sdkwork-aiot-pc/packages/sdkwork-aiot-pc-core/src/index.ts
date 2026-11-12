@@ -94,6 +94,8 @@ export {
 export type { AiotDevice, SdkworkAiotAppClient } from '@sdkwork/aiot-app-sdk';
 export type {
   AiotDeviceHardwareTool,
+  AiotDeviceHardwareToolCallRequest,
+  AiotDeviceHardwareToolCallResult,
   AiotDeviceHardwareTools,
   AiotDeviceSettingDefinition,
   AiotDeviceSettingKind,

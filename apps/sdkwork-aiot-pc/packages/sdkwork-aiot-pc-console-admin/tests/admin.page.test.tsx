@@ -96,6 +96,11 @@ function createService(): SdkworkAdminService {
       })),
     })),
     getDeviceSettings: vi.fn(async (deviceId: string) => settingsFor(deviceId)),
+    invokeHardwareTool: vi.fn(async (deviceId: string, toolName: string) => ({
+      deviceId,
+      result: { content: [{ text: "volume accepted", type: "text" }] },
+      toolName,
+    })),
     listHardwareTools: vi.fn(async (deviceId: string) => ({
       deviceId,
       discovered: true,
@@ -289,5 +294,29 @@ describe("sdkwork-aiot-pc-console-admin page", () => {
     ).toBeInTheDocument();
     expect(await screen.findByText(/参数：volume/)).toBeInTheDocument();
     expect(service.listHardwareTools).toHaveBeenCalledWith("device-a");
+  });
+
+  it("invokes a discovered hardware tool from the device panel", async () => {
+    const service = createService();
+    const controller = createSdkworkAdminController({ service });
+    renderPage(controller);
+
+    expect(
+      await screen.findByText("self.audio_speaker.set_volume"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^调用$/ }));
+    const args = await screen.findByLabelText("参数 JSON");
+    fireEvent.change(args, { target: { value: '{"volume":30}' } });
+    fireEvent.click(screen.getByRole("button", { name: /执行调用/ }));
+
+    await waitFor(() => {
+      expect(service.invokeHardwareTool).toHaveBeenCalledWith(
+        "device-a",
+        "self.audio_speaker.set_volume",
+        { volume: 30 },
+      );
+    });
+    expect((await screen.findAllByText(/调用完成/)).length).toBeGreaterThan(0);
+    expect(await screen.findByText(/volume accepted/)).toBeInTheDocument();
   });
 });

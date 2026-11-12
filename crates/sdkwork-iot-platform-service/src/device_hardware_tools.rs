@@ -15,8 +15,10 @@ use serde_json::Value;
 pub const ENV_EDGE_DEVICE_INGRESS_HTTP_URL: &str = "SDKWORK_AIOT_EDGE_DEVICE_INGRESS_HTTP_URL";
 pub const ENV_INTERNAL_TOKEN: &str = "SDKWORK_AIOT_INTERNAL_TOKEN";
 pub const ENV_HARDWARE_TOOLS_TIMEOUT_MS: &str = "SDKWORK_AIOT_HARDWARE_TOOLS_TIMEOUT_MS";
+pub const ENV_HARDWARE_TOOL_CALL_TIMEOUT_MS: &str = "SDKWORK_AIOT_HARDWARE_TOOL_CALL_TIMEOUT_MS";
 pub const DEFAULT_EDGE_DEVICE_INGRESS_HTTP_URL: &str = "http://127.0.0.1:18080";
 pub const DEFAULT_HARDWARE_TOOLS_TIMEOUT_MS: u64 = 1_500;
+pub const DEFAULT_HARDWARE_TOOL_CALL_TIMEOUT_MS: u64 = 12_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AiotDeviceHardwareTool {
@@ -71,6 +73,7 @@ impl AiotDeviceHardwareToolCatalog {
 pub enum AiotDeviceHardwareToolError {
     Unavailable(String),
     InvalidResponse(String),
+    Busy(String),
     NotFound(String),
     Timeout(String),
     InvalidArguments(String),
@@ -100,6 +103,7 @@ pub struct EdgeRuntimeHardwareToolSource {
     base_url: String,
     internal_token: Option<String>,
     timeout: Duration,
+    invoke_timeout: Duration,
 }
 
 impl EdgeRuntimeHardwareToolSource {
@@ -120,10 +124,18 @@ impl EdgeRuntimeHardwareToolSource {
                 .filter(|value| *value > 0)
                 .unwrap_or(DEFAULT_HARDWARE_TOOLS_TIMEOUT_MS),
         );
+        let invoke_timeout = Duration::from_millis(
+            std::env::var(ENV_HARDWARE_TOOL_CALL_TIMEOUT_MS)
+                .ok()
+                .and_then(|value| value.parse::<u64>().ok())
+                .filter(|value| *value > 0)
+                .unwrap_or(DEFAULT_HARDWARE_TOOL_CALL_TIMEOUT_MS),
+        );
         Self {
             base_url,
             internal_token,
             timeout,
+            invoke_timeout,
         }
     }
 
@@ -131,11 +143,13 @@ impl EdgeRuntimeHardwareToolSource {
         base_url: impl Into<String>,
         internal_token: Option<String>,
         timeout: Duration,
+        invoke_timeout: Duration,
     ) -> Self {
         Self {
             base_url: base_url.into().trim_end_matches('/').to_string(),
             internal_token,
             timeout,
+            invoke_timeout,
         }
     }
 }
@@ -192,7 +206,9 @@ impl AiotDeviceHardwareToolSource for EdgeRuntimeHardwareToolSource {
         })
         .to_string();
         let url = format!("{}/internal/xiaozhi/mcp_tools/call", self.base_url);
-        let agent = ureq::AgentBuilder::new().timeout(self.timeout).build();
+        let agent = ureq::AgentBuilder::new()
+            .timeout(self.invoke_timeout)
+            .build();
         let mut request = agent.post(&url).set("content-type", "application/json");
         if let Some(token) = self.internal_token.as_deref() {
             request = request.set("x-sdkwork-internal-token", token);
@@ -207,6 +223,9 @@ impl AiotDeviceHardwareToolSource for EdgeRuntimeHardwareToolSource {
                 })?;
                 Ok(value.get("result").cloned().unwrap_or(Value::Null))
             }
+            Err(ureq::Error::Status(429, _)) => Err(AiotDeviceHardwareToolError::Busy(
+                "another MCP tool call is already in flight for this device".to_string(),
+            )),
             Err(ureq::Error::Status(404, _)) => Err(AiotDeviceHardwareToolError::NotFound(
                 "device or MCP tool was not found".to_string(),
             )),
