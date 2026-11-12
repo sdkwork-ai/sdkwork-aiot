@@ -1304,6 +1304,39 @@
       "auth": {
         "dataScope": "organization",
         "mode": "dual-token",
+        "permission": "iot.commands.execute",
+        "required": true,
+        "tenantScope": "tenant"
+      },
+      "handler": {
+        "module": "sdkwork_iot_platform_service",
+        "name": "devices.hardwareTools.invoke"
+      },
+      "method": "POST",
+      "operationId": "devices.hardwareTools.invoke",
+      "ownership": {
+        "apiAuthority": "sdkwork-aiot-backend-api",
+        "owner": "sdkwork-aiot"
+      },
+      "path": "/backend/v3/api/iot/devices/{deviceId}/hardware_tool_calls",
+      "requestContext": "WebRequestContext",
+      "schemas": {
+        "problem": "ProblemDetail",
+        "request": null,
+        "response": null
+      },
+      "source": {
+        "file": "crates/sdkwork-iot-platform-service/src/lib.rs"
+      },
+      "tags": [
+        "iot.devices"
+      ]
+    },
+    {
+      "apiSurface": "backend-api",
+      "auth": {
+        "dataScope": "organization",
+        "mode": "dual-token",
         "permission": "iot.deviceSettings.write",
         "required": true,
         "tenantScope": "tenant"

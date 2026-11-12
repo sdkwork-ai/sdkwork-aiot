@@ -8416,10 +8416,12 @@ fn device_hardware_tool_call_payload_from_request(
         None | Some(JsonValue::Null) => "{}".to_string(),
         Some(JsonValue::Object(_)) => obj["arguments"].to_string(),
         Some(_) => {
-            return Err(problem_response(
+            return Err(problem_detail_with_errors(
+                request,
                 HttpStatus::UnprocessableEntity,
-                "api.request.invalid_field",
+                SdkWorkResultCode::ValidationError,
                 "arguments must be a JSON object",
+                &serde_json::json!([]),
             ));
         }
     };

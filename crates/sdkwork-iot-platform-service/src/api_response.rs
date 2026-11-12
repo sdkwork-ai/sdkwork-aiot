@@ -37,7 +37,9 @@ pub fn aiot_wire_code_to_result(wire_code: &str) -> SdkWorkResultCode {
         | "api.device.invalid_product_id"
         | "api.firmware.rollout.invalid_target_policy"
         | "api.firmware.artifact.invalid_reference" => SdkWorkResultCode::ValidationError,
-        "api.request.body.required" => SdkWorkResultCode::MissingRequiredField,
+        "api.request.body.required" | "api.request.missing_field" => {
+            SdkWorkResultCode::MissingRequiredField
+        }
         "api.route.unsupported" => SdkWorkResultCode::NotFound,
         code if code.ends_with(".not_found") => SdkWorkResultCode::NotFound,
         code if code.contains("duplicate") => SdkWorkResultCode::Conflict,
@@ -48,7 +50,10 @@ pub fn aiot_wire_code_to_result(wire_code: &str) -> SdkWorkResultCode {
         | "api.intelligence.kernel_unavailable"
         | "api.intelligence.kernel_session_failed"
         | "api.intelligence.kernel_message_failed"
-        | "api.device.hardware_tools.unavailable" => SdkWorkResultCode::ServiceUnavailable,
+        | "api.device.hardware_tools.unavailable"
+        | "api.device.hardware_tools.timeout"
+        | "api.device.hardware_tools.device_error" => SdkWorkResultCode::ServiceUnavailable,
+        "api.device.hardware_tools.tool_not_found" => SdkWorkResultCode::NotFound,
         "api.device.hardware_tools.invalid_response" => SdkWorkResultCode::InternalError,
         _ => legacy_wire_result_code(wire_code),
     }

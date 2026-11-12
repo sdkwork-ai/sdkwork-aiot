@@ -3209,6 +3209,80 @@
         }
       }
     },
+    "/backend/v3/api/iot/devices/{deviceId}/hardware_tool_calls": {
+      "post": {
+        "tags": [
+          "iot"
+        ],
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceId"
+          }
+        ],
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-owner": "sdkwork-aiot",
+        "x-sdkwork-api-authority": "sdkwork-aiot-backend-api",
+        "operationId": "devices.hardwareTools.invoke",
+        "x-sdkwork-required-permission": "iot.commands.execute",
+        "summary": "Invoke one MCP hardware tool on a device",
+        "description": "Calls one MCP tool exposed by the device's live Xiaozhi session and returns the device JSON-RPC result. The call is bounded by the edge runtime timeout.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiotDeviceHardwareToolCallRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device MCP tool invocation result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "required": [
+                            "item"
+                          ],
+                          "properties": {
+                            "item": {
+                              "$ref": "#/components/schemas/AiotDeviceHardwareToolCallResult"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/backend/v3/api/iot/devices/{deviceId}/settings/history": {
       "get": {
         "tags": [
@@ -5282,6 +5356,40 @@
             }
           }
         ]
+      },
+      "AiotDeviceHardwareToolCallRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "toolName"
+        ],
+        "properties": {
+          "toolName": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "AiotDeviceHardwareToolCallResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "deviceId",
+          "toolName",
+          "result"
+        ],
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "toolName": {
+            "type": "string"
+          },
+          "result": {}
+        }
       },
       "AiotDeviceHardwareTool": {
         "type": "object",
