@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { SdkworkHardwareConsole } from '../src/hardware-console.tsx';
+import { SdkworkHardwareDevicesPage } from '../src/devices-page.tsx';
+import { SdkworkHardwareFirmwarePage } from '../src/firmware-page.tsx';
 import type { ConsoleHardwareService } from '../src/hardware-service.ts';
 
 function stubService(): ConsoleHardwareService {
@@ -55,27 +56,42 @@ function stubService(): ConsoleHardwareService {
   };
 }
 
-describe('SdkworkHardwareConsole', () => {
-  it('renders the user devices with the bound-agent state', async () => {
-    render(<SdkworkHardwareConsole canManage service={stubService()} />);
+describe('SdkworkHardwareDevicesPage', () => {
+  it('renders only the device registry for its URL', async () => {
+    render(<SdkworkHardwareDevicesPage canManage service={stubService()} />);
     await waitFor(() => expect(screen.getAllByText('Lobby lock').length).toBeGreaterThan(0));
-    expect(screen.getByRole('button', { name: 'My hardware' })).toBeInTheDocument();
-    expect(screen.getAllByText('No agent bound').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { level: 1, name: 'Smart Hardware' })).toBeInTheDocument();
+    expect(screen.getByText('My devices')).toBeInTheDocument();
+    // The firmware catalog belongs to the other page and must not be fetched here.
+    expect(screen.queryByText('lock-fw')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Register device' })).toBeInTheDocument();
+  });
+
+  it('navigates to the firmware page through the page switcher', async () => {
+    const onNavigate = vi.fn();
+    render(<SdkworkHardwareDevicesPage canManage onNavigate={onNavigate} service={stubService()} />);
+    await waitFor(() => expect(screen.getAllByText('Lobby lock').length).toBeGreaterThan(0));
+    screen.getByRole('button', { name: 'Firmware downloads' }).click();
+    expect(onNavigate).toHaveBeenCalledWith('firmware');
   });
 
   it('hides registration when the host has no write grant', async () => {
-    render(<SdkworkHardwareConsole canManage={false} service={stubService()} />);
+    render(<SdkworkHardwareDevicesPage canManage={false} service={stubService()} />);
     await waitFor(() => expect(screen.getAllByText('Lobby lock').length).toBeGreaterThan(0));
     expect(screen.queryAllByRole('button', { name: 'Register device' })).toHaveLength(0);
     expect(screen.getByText(/cannot register them/i)).toBeInTheDocument();
   });
 
-  it('renders the firmware catalog with a direct download link', async () => {
-    const { container } = render(<SdkworkHardwareConsole canManage={false} service={stubService()} />);
+  it('ships dark-mode variants on its surfaces', async () => {
+    const { container } = render(<SdkworkHardwareDevicesPage canManage service={stubService()} />);
     await waitFor(() => expect(screen.getAllByText('Lobby lock').length).toBeGreaterThan(0));
-    screen.getAllByRole('button', { name: 'Firmware downloads' })[0]?.click();
-    await waitFor(() => expect(screen.getByText('lock-fw')).toBeInTheDocument());
-    expect(container.querySelector('a[href="https://example.test/fw.bin"]')).not.toBeNull();
+    const darkClasses = Array.from(container.querySelectorAll('[class]')).flatMap((element) =>
+      Array.from(element.classList).filter((value) => value.startsWith('dark:')),
+    );
+    expect(new Set(darkClasses).size).toBeGreaterThan(20);
+    expect(darkClasses).toContain('dark:bg-zinc-900');
+    expect(darkClasses).toContain('dark:border-zinc-800');
+    expect(darkClasses).toContain('dark:text-zinc-100');
   });
 
   it('loads the next device page and de-duplicates the appended rows', async () => {
@@ -90,22 +106,38 @@ describe('SdkworkHardwareConsole', () => {
       }
       return {
         hasMore: false,
-        items: [
-          // The same device is returned again to prove the append de-duplicates.
-          firstDevice,
-          { ...firstDevice, deviceId: 'dev-2', displayName: 'Hall lock' },
-        ],
+        items: [firstDevice, { ...firstDevice, deviceId: 'dev-2', displayName: 'Hall lock' }],
         page: 2,
         pageSize: 20,
         total: 2,
       };
     });
-    render(<SdkworkHardwareConsole canManage={false} service={service} />);
+    render(<SdkworkHardwareDevicesPage canManage={false} service={service} />);
     await waitFor(() => expect(screen.getAllByText('Lobby lock').length).toBeGreaterThan(0));
     expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument();
     screen.getByRole('button', { name: 'Load more' }).click();
     await waitFor(() => expect(screen.getAllByText('Hall lock').length).toBeGreaterThan(0));
     expect(call).toBeGreaterThan(1);
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+  });
+});
+
+describe('SdkworkHardwareFirmwarePage', () => {
+  it('renders only the firmware catalog for its URL', async () => {
+    const { container } = render(<SdkworkHardwareFirmwarePage service={stubService()} />);
+    await waitFor(() => expect(screen.getByText('Firmware downloads')).toBeInTheDocument());
+    expect(screen.getByRole('heading', { level: 1, name: 'Firmware downloads' })).toBeInTheDocument();
+    expect(container.querySelector('a[href="https://example.test/fw.bin"]')).not.toBeNull();
+    // The device registry belongs to the other page.
+    expect(screen.queryByText('My devices')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lobby lock')).not.toBeInTheDocument();
+  });
+
+  it('navigates back to the device registry', async () => {
+    const onNavigate = vi.fn();
+    render(<SdkworkHardwareFirmwarePage onNavigate={onNavigate} service={stubService()} />);
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Firmware downloads' })).toBeInTheDocument());
+    screen.getByRole('button', { name: 'My hardware' }).click();
+    expect(onNavigate).toHaveBeenCalledWith('devices');
   });
 });
