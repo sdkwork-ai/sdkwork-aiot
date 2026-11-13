@@ -9,6 +9,7 @@ import {
   mapAdminDeviceRecord,
   mapAdminDeviceSettings,
   mapBulkResult,
+  mapHardwareToolInvocation,
   mapHardwareTools,
   mapSettingsHistoryPage,
   type SdkworkAdminBulkResult,
@@ -16,6 +17,7 @@ import {
   type SdkworkAdminDevicePage,
   type SdkworkAdminDeviceSettings,
   type SdkworkAdminDeviceSettingsDraft,
+  type SdkworkAdminHardwareToolInvocation,
   type SdkworkAdminHardwareTools,
   type SdkworkAdminSettingsHistoryPage,
 } from "./admin";
@@ -53,6 +55,11 @@ export interface SdkworkAdminService {
   getDeviceSettings(deviceId: string): Promise<SdkworkAdminDeviceSettings>;
   listDevices(input?: GetSdkworkAdminDevicesInput): Promise<SdkworkAdminDevicePage>;
   listHardwareTools(deviceId: string): Promise<SdkworkAdminHardwareTools>;
+  invokeHardwareTool(
+    deviceId: string,
+    toolName: string,
+    args: Record<string, unknown>,
+  ): Promise<SdkworkAdminHardwareToolInvocation>;
   listSettingsHistory(
     deviceId: string,
     input?: GetSdkworkAdminSettingsHistoryInput,
@@ -192,6 +199,14 @@ export function createSdkworkAdminService(
     async listHardwareTools(deviceId) {
       const response = await resolveClient().iot.devices.hardwareTools.list(deviceId);
       return mapHardwareTools(response, deviceId);
+    },
+
+    async invokeHardwareTool(deviceId, toolName, args) {
+      const response = await resolveClient().iot.devices.hardwareTools.execute(deviceId, {
+        arguments: args,
+        toolName,
+      });
+      return mapHardwareToolInvocation(response, deviceId, toolName);
     },
 
     async resetDeviceSettings(deviceId) {

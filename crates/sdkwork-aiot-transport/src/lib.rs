@@ -29,6 +29,8 @@ pub enum HttpStatus {
     TooManyRequests,
     UnprocessableEntity,
     ServiceUnavailable,
+    BadGateway,
+    GatewayTimeout,
     InternalServerError,
 }
 
@@ -48,6 +50,8 @@ impl HttpStatus {
             Self::TooManyRequests => 429,
             Self::UnprocessableEntity => 422,
             Self::ServiceUnavailable => 503,
+            Self::BadGateway => 502,
+            Self::GatewayTimeout => 504,
             Self::InternalServerError => 500,
         }
     }
@@ -67,6 +71,8 @@ impl HttpStatus {
             Self::TooManyRequests => "Too Many Requests",
             Self::UnprocessableEntity => "Unprocessable Entity",
             Self::ServiceUnavailable => "Service Unavailable",
+            Self::BadGateway => "Bad Gateway",
+            Self::GatewayTimeout => "Gateway Timeout",
             Self::InternalServerError => "Internal Server Error",
         }
     }

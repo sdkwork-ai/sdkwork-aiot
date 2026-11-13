@@ -167,6 +167,8 @@ mod tests {
             id: "1".to_string(),
             tenant_id: 100001,
             organization_id: 0,
+            owner_type: "device".to_string(),
+            owner_id: format!("100001:0:{device_id}"),
             device_id: device_id.to_string(),
             display_name: device_id.to_string(),
             product_id: product_id.to_string(),

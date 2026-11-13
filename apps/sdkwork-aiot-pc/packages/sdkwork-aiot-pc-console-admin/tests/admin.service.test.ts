@@ -20,6 +20,7 @@ import {
 interface FakeBackend {
   bulkUpdate: ReturnType<typeof vi.fn>;
   deviceList: ReturnType<typeof vi.fn>;
+  hardwareToolInvoke: ReturnType<typeof vi.fn>;
   hardwareToolsList: ReturnType<typeof vi.fn>;
   historyList: ReturnType<typeof vi.fn>;
   resetSettings: ReturnType<typeof vi.fn>;
@@ -32,6 +33,7 @@ function createFakeBackend(): { backend: FakeBackend; client: SdkworkAiotBackend
   const backend: FakeBackend = {
     bulkUpdate: vi.fn(),
     deviceList: vi.fn(),
+    hardwareToolInvoke: vi.fn(),
     hardwareToolsList: vi.fn(),
     historyList: vi.fn(),
     resetSettings: vi.fn(),
@@ -46,6 +48,7 @@ function createFakeBackend(): { backend: FakeBackend; client: SdkworkAiotBackend
       },
       devices: {
         hardwareTools: {
+          execute: backend.hardwareToolInvoke,
           list: backend.hardwareToolsList,
         },
         list: backend.deviceList,
@@ -136,6 +139,30 @@ describe("sdkwork-aiot-pc-console-admin service", () => {
     expect(catalog.tools).toHaveLength(2);
     expect(catalog.tools[0].name).toBe("self.audio_speaker.set_volume");
     expect(catalog.tools[0].inputSchema.type).toBe("object");
+  });
+
+  it("invokes a hardware tool with JSON arguments and maps the device result", async () => {
+    const { backend, client } = createFakeBackend();
+    backend.hardwareToolInvoke.mockResolvedValue({
+      deviceId: "device-1",
+      result: { content: [{ text: "ok", type: "text" }], isError: false },
+      toolName: "self.audio_speaker.set_volume",
+    });
+    const service = createSdkworkAdminService({ backendClient: client });
+
+    const invocation = await service.invokeHardwareTool(
+      "device-1",
+      "self.audio_speaker.set_volume",
+      { volume: 30 },
+    );
+
+    expect(backend.hardwareToolInvoke).toHaveBeenCalledWith("device-1", {
+      arguments: { volume: 30 },
+      toolName: "self.audio_speaker.set_volume",
+    });
+    expect(invocation.deviceId).toBe("device-1");
+    expect(invocation.toolName).toBe("self.audio_speaker.set_volume");
+    expect(invocation.result).toMatchObject({ isError: false });
   });
 
   it("sends the current revision with the replaced overrides map", async () => {

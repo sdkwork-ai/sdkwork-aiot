@@ -67,13 +67,13 @@ use sdkwork_aiot_storage::{
     paginate_vec, table_contract, AiotCommandCreateCommand, AiotCommandDeliveryEnqueueCommand,
     AiotCommandDeliveryRecord, AiotCommandDeliveryRepository, AiotCommandDeliveryRepositoryError,
     AiotCommandRecord, AiotCommandRepository, AiotCommandRepositoryError, AiotDeviceCreateCommand,
-    AiotDeviceEventCreateCommand, AiotDeviceEventRecord, AiotDeviceRecord, AiotDeviceRepository,
-    AiotDeviceRepositoryError, AiotDeviceSessionRecord, AiotDeviceSessionRepository,
-    AiotDeviceTwinRepository, AiotDeviceTwinRepositoryError, AiotDeviceTwinSnapshot,
-    AiotDeviceUpdateCommand, AiotEventRepository, AiotEventRepositoryError, AiotOffsetListResult,
-    AiotProtocolDeadLetterIntent, AiotProtocolIngestUnitOfWork, AiotProtocolStorageCommand,
-    AiotStorageAssociation, AiotStorageWriteReceipt, AiotTwinPropertyUpsertCommand,
-    OffsetListPageParams, OUTBOX_STATUS_PENDING,
+    AiotDeviceEventCreateCommand, AiotDeviceEventRecord, AiotDeviceOwnerScope, AiotDeviceRecord,
+    AiotDeviceRepository, AiotDeviceRepositoryError, AiotDeviceSessionRecord,
+    AiotDeviceSessionRepository, AiotDeviceTwinRepository, AiotDeviceTwinRepositoryError,
+    AiotDeviceTwinSnapshot, AiotDeviceUpdateCommand, AiotEventRepository, AiotEventRepositoryError,
+    AiotOffsetListResult, AiotProtocolDeadLetterIntent, AiotProtocolIngestUnitOfWork,
+    AiotProtocolStorageCommand, AiotStorageAssociation, AiotStorageWriteReceipt,
+    AiotTwinPropertyUpsertCommand, OffsetListPageParams, OUTBOX_STATUS_PENDING,
 };
 use sdkwork_database_sqlx::PoolError;
 use sdkwork_utils_rust::uuid;
@@ -304,10 +304,19 @@ impl AiotDeviceRepository for InMemorySqlxDeviceRepository {
             return Err(AiotDeviceRepositoryError::DuplicateDeviceId);
         }
 
+        let owner = command.owner.unwrap_or_else(|| {
+            AiotDeviceOwnerScope::self_owned(
+                command.association.tenant_id,
+                command.association.organization_id,
+                command.device_id.clone(),
+            )
+        });
         let record = AiotDeviceRecord {
             id: (state.next_device_pk + 1).to_string(),
             tenant_id: command.association.tenant_id,
             organization_id: command.association.organization_id,
+            owner_type: owner.owner_type,
+            owner_id: owner.owner_id,
             device_id: command.device_id,
             display_name: command.display_name,
             product_id: command.product_id,
@@ -362,6 +371,86 @@ impl AiotDeviceRepository for InMemorySqlxDeviceRepository {
             .cloned()
             .collect::<Vec<_>>();
         Ok(paginate_vec(items, params))
+    }
+
+    fn list_devices_by_owner(
+        &self,
+        association: &AiotStorageAssociation,
+        owner: &AiotDeviceOwnerScope,
+        params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotDeviceRecord>, AiotDeviceRepositoryError> {
+        let items = self
+            .state
+            .lock()
+            .expect("sqlx device repo state poisoned")
+            .devices
+            .values()
+            .filter(|device| {
+                device.tenant_id == association.tenant_id
+                    && device.organization_id == association.organization_id
+                    && device.owner_type == owner.owner_type
+                    && device.owner_id == owner.owner_id
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        Ok(paginate_vec(items, params))
+    }
+
+    fn get_device_by_owner(
+        &self,
+        association: &AiotStorageAssociation,
+        owner: &AiotDeviceOwnerScope,
+        device_id: &str,
+    ) -> Option<AiotDeviceRecord> {
+        self.state
+            .lock()
+            .expect("sqlx device repo state poisoned")
+            .devices
+            .get(&scoped_device_key(association, device_id))
+            .filter(|device| {
+                device.owner_type == owner.owner_type && device.owner_id == owner.owner_id
+            })
+            .cloned()
+    }
+    fn list_devices_for_user_scope(
+        &self,
+        association: &AiotStorageAssociation,
+        user_id: &str,
+        params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotDeviceRecord>, AiotDeviceRepositoryError> {
+        let items = self
+            .state
+            .lock()
+            .expect("sqlx device repo state poisoned")
+            .devices
+            .values()
+            .filter(|device| {
+                device.tenant_id == association.tenant_id
+                    && device.organization_id == association.organization_id
+                    && (device.owner_type == "device"
+                        || (device.owner_type == "user" && device.owner_id == user_id))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        Ok(paginate_vec(items, params))
+    }
+
+    fn get_device_for_user_scope(
+        &self,
+        association: &AiotStorageAssociation,
+        user_id: &str,
+        device_id: &str,
+    ) -> Option<AiotDeviceRecord> {
+        self.state
+            .lock()
+            .expect("sqlx device repo state poisoned")
+            .devices
+            .get(&scoped_device_key(association, device_id))
+            .filter(|device| {
+                device.owner_type == "device"
+                    || (device.owner_type == "user" && device.owner_id == user_id)
+            })
+            .cloned()
     }
 
     fn list_device_ids_for_rollout(
@@ -1671,6 +1760,14 @@ fn device_create_statement(
         "{}:{}:{}",
         device.tenant_id, device.organization_id, device.device_id
     );
+    // The record's ownership relation wins: the user console registers devices
+    // with owner_type = "user" so the owner-scoped page can find them. Records
+    // built before ownership existed keep the self-owned fallback.
+    let (owner_type, owner_id) = if device.owner_type.is_empty() {
+        ("device".to_string(), owner_id)
+    } else {
+        (device.owner_type.clone(), device.owner_id.clone())
+    };
     let statement = SqlStatementPlan::bound(
         "device_create",
         "iot_device",
@@ -1685,7 +1782,7 @@ fn device_create_statement(
             SqlBindValue::Int64(device.tenant_id),
             SqlBindValue::Int64(device.organization_id),
             SqlBindValue::Int64(0),
-            SqlBindValue::text("device"),
+            SqlBindValue::text(owner_type),
             SqlBindValue::text(owner_id),
             SqlBindValue::text(&device.device_id),
             SqlBindValue::Int64(product_id),

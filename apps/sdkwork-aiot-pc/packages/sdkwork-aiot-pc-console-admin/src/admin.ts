@@ -170,6 +170,47 @@ export function hardwareToolParameters(tool: SdkworkAdminHardwareTool): string[]
   return Object.keys(properties).sort();
 }
 
+export interface SdkworkAdminHardwareToolInvocation {
+  deviceId: string;
+  toolName: string;
+  result: unknown;
+}
+
+export function mapHardwareToolInvocation(
+  value: unknown,
+  fallbackDeviceId = "",
+  fallbackToolName = "",
+): SdkworkAdminHardwareToolInvocation {
+  const record = readJsonRecord(value);
+  return {
+    deviceId: readText(record.deviceId) || fallbackDeviceId,
+    toolName: readText(record.toolName) || fallbackToolName,
+    result: record.result,
+  };
+}
+
+export type SdkworkAdminHardwareToolArgumentsResult =
+  | { ok: true; value: Record<string, unknown> }
+  | { ok: false; error: string };
+
+export function parseHardwareToolArguments(
+  text: string,
+): SdkworkAdminHardwareToolArgumentsResult {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return { ok: true, value: {} };
+  }
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { ok: false, error: "Arguments must be a JSON object." };
+    }
+    return { ok: true, value: parsed as Record<string, unknown> };
+  } catch {
+    return { ok: false, error: "Arguments must be valid JSON." };
+  }
+}
+
 export interface SdkworkAdminSettingValidation {
   message: string;
   ok: false;

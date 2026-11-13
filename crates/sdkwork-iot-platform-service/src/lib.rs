@@ -46,13 +46,13 @@ use sdkwork_aiot_service_host::{
 use sdkwork_aiot_storage::{
     paginate_bounded_catalog, paginate_vec, AiotCommandCreateCommand, AiotCommandRecord,
     AiotCommandRepository, AiotCommandRepositoryError, AiotDeviceCreateCommand,
-    AiotDeviceEventRecord, AiotDeviceRecord, AiotDeviceRepository, AiotDeviceRepositoryError,
-    AiotDeviceSessionRecord, AiotDeviceSessionRepository, AiotDeviceTwinRepository,
-    AiotDeviceTwinRepositoryError, AiotDeviceTwinSnapshot, AiotDeviceUpdateCommand,
-    AiotEventRepository, AiotEventRepositoryError, AiotOffsetListResult, AiotStorageAssociation,
-    AiotTwinPropertyUpsertCommand, InMemoryAiotCommandRepository, InMemoryAiotDeviceRepository,
-    InMemoryAiotDeviceSessionRepository, InMemoryAiotDeviceTwinRepository,
-    InMemoryAiotEventRepository, OffsetListPageParams,
+    AiotDeviceEventRecord, AiotDeviceOwnerScope, AiotDeviceRecord, AiotDeviceRepository,
+    AiotDeviceRepositoryError, AiotDeviceSessionRecord, AiotDeviceSessionRepository,
+    AiotDeviceTwinRepository, AiotDeviceTwinRepositoryError, AiotDeviceTwinSnapshot,
+    AiotDeviceUpdateCommand, AiotEventRepository, AiotEventRepositoryError, AiotOffsetListResult,
+    AiotStorageAssociation, AiotTwinPropertyUpsertCommand, InMemoryAiotCommandRepository,
+    InMemoryAiotDeviceRepository, InMemoryAiotDeviceSessionRepository,
+    InMemoryAiotDeviceTwinRepository, InMemoryAiotEventRepository, OffsetListPageParams,
 };
 use sdkwork_aiot_transport::{build_health_response, HttpRequest, HttpResponse, HttpStatus};
 use sdkwork_iot_device_service::{
@@ -70,6 +70,7 @@ mod device_settings;
 mod firmware_rollout_planner;
 mod service_stores;
 
+use admin_stores::is_active_product_status as product_status_allows_registration;
 pub use admin_stores::{AiotCatalogRepositoryHandle, AiotFirmwareRepositoryHandle};
 pub use device_hardware_tools::{
     AiotDeviceHardwareTool, AiotDeviceHardwareToolCatalog, AiotDeviceHardwareToolError,
@@ -434,8 +435,21 @@ fn resolve_protected_context_from_proxy_headers(
 
     let mut ctx = AiotRequestContext::new(tenant_id, organization_id);
 
-    if let Some(user_id) = optional_header(request, "x-sdkwork-user-id") {
-        parse_i64(user_id).map_err(|_| {
+    let user_id = optional_header(request, "x-sdkwork-user-id")
+        .map(str::to_string)
+        .or_else(|| {
+            // Local/dev proxy requests may omit the user header; production requests
+            // must always carry it so tenant data is never exposed without a user.
+            dev_mode_enabled().then(|| {
+                std::env::var("SDKWORK_AIOT_DEV_USER_ID")
+                    .ok()
+                    .map(|value| value.trim().to_string())
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or_else(|| "30001".to_string())
+            })
+        });
+    if let Some(user_id) = user_id {
+        parse_i64(&user_id).map_err(|_| {
             problem_response(
                 HttpStatus::BadRequest,
                 "api.context.invalid_user_id",
@@ -884,6 +898,37 @@ pub fn standard_api_route_contracts() -> Vec<AiotApiRouteContract> {
             operation_id: "devices.retrieve",
             required_permission: IOT_PERMISSION_DEVICES_READ,
         },
+        // User-console Smart Hardware group: the signed-in user registers and
+        // maintains their own terminal devices, so these app-surface operations
+        // are owner-scoped to the request's user identity.
+        AiotApiRouteContract {
+            surface: AiotApiSurface::App,
+            method: "POST",
+            path: "/app/v3/api/iot/devices",
+            operation_id: "devices.create",
+            required_permission: IOT_PERMISSION_DEVICES_WRITE,
+        },
+        AiotApiRouteContract {
+            surface: AiotApiSurface::App,
+            method: "PUT",
+            path: "/app/v3/api/iot/devices/{deviceId}",
+            operation_id: "devices.update",
+            required_permission: IOT_PERMISSION_DEVICES_WRITE,
+        },
+        AiotApiRouteContract {
+            surface: AiotApiSurface::App,
+            method: "GET",
+            path: "/app/v3/api/iot/products",
+            operation_id: "products.list",
+            required_permission: IOT_PERMISSION_PRODUCTS_READ,
+        },
+        AiotApiRouteContract {
+            surface: AiotApiSurface::App,
+            method: "GET",
+            path: "/app/v3/api/iot/firmware_artifacts",
+            operation_id: "firmwareArtifacts.list",
+            required_permission: IOT_PERMISSION_FIRMWARE_READ,
+        },
         AiotApiRouteContract {
             surface: AiotApiSurface::App,
             method: "POST",
@@ -1184,6 +1229,13 @@ pub fn standard_api_route_contracts() -> Vec<AiotApiRouteContract> {
             path: "/backend/v3/api/iot/devices/{deviceId}/hardware_tools",
             operation_id: "devices.hardwareTools.list",
             required_permission: IOT_PERMISSION_DEVICES_READ,
+        },
+        AiotApiRouteContract {
+            surface: AiotApiSurface::Admin,
+            method: "POST",
+            path: "/backend/v3/api/iot/devices/{deviceId}/hardware_tool_calls/execute",
+            operation_id: "devices.hardwareTools.execute",
+            required_permission: IOT_PERMISSION_COMMANDS_EXECUTE,
         },
         AiotApiRouteContract {
             surface: AiotApiSurface::Admin,
@@ -1904,6 +1956,212 @@ impl AiotApiServer {
         let association = request_context_to_storage_association(context)?;
         self.device_repository
             .list_devices(&association, params)
+            .map_err(device_repository_error_to_response)
+    }
+
+    /// Ownership scope of the signed-in console user.
+    ///
+    /// The user console manages the terminal devices a user registered, so the
+    /// app surface must never fall back to the tenant-wide list when the request
+    /// carries no user identity: that would leak every device of the tenant.
+    fn owner_scope_for_context(
+        context: &AiotRequestContext,
+    ) -> Result<AiotDeviceOwnerScope, HttpResponse> {
+        let user_id = context
+            .user_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        match user_id {
+            Some(user_id) => Ok(AiotDeviceOwnerScope::user(user_id)),
+            None => Err(problem_response(
+                HttpStatus::Forbidden,
+                "api.context.user.missing",
+                "A resolved user identity is required to manage personal devices",
+            )),
+        }
+    }
+
+    /// Registers a terminal device owned by the signed-in console user.
+    fn register_owned_device(
+        &self,
+        context: &AiotRequestContext,
+        payload: AiotDeviceCreatePayload,
+    ) -> Result<AiotDeviceRecord, HttpResponse> {
+        let association = request_context_to_storage_association(context)?;
+        let owner = Self::owner_scope_for_context(context)?;
+        self.ensure_standard_catalog_seeded(&association);
+        let Some(product) = self
+            .catalog_repository
+            .get_product(&association, &payload.product_id)
+        else {
+            return Err(product_not_found_response(&payload.product_id));
+        };
+        if !product_status_allows_registration(&product.status) {
+            return Err(problem_response(
+                HttpStatus::Conflict,
+                "aiot.product.registration_closed",
+                "The selected product no longer accepts device registration",
+            ));
+        }
+        let mut command = AiotDeviceCreateCommand::new(
+            association,
+            payload.device_id,
+            payload.display_name,
+            payload.product_id,
+        )
+        .with_owner(owner);
+        if let Some(client_id) = payload.client_id {
+            command = command.with_client_id(client_id);
+        }
+        if let Some(chip_family) = payload.chip_family {
+            command = command.with_chip_family(chip_family);
+        }
+
+        self.device_repository
+            .create_device(command)
+            .map_err(device_repository_error_to_response)
+    }
+
+    /// Lists the devices owned by the signed-in console user.
+    fn list_owned_devices(
+        &self,
+        context: &AiotRequestContext,
+        params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotDeviceRecord>, HttpResponse> {
+        let association = request_context_to_storage_association(context)?;
+        let owner = Self::owner_scope_for_context(context)?;
+        self.device_repository
+            .list_devices_for_user_scope(&association, &owner.owner_id, params)
+            .map_err(device_repository_error_to_response)
+    }
+
+    /// App-surface product catalog: only products still open for registration.
+    fn list_registration_products(
+        &self,
+        context: &AiotRequestContext,
+        params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotProductRecord>, HttpResponse> {
+        let association = request_context_to_storage_association(context)?;
+        self.ensure_standard_catalog_seeded(&association);
+        self.catalog_repository
+            .list_products_page_for_registration(&association, params)
+            .map_err(catalog_repository_error_to_response)
+    }
+
+    /// App-surface firmware catalog: only published artifacts are downloadable.
+    fn list_published_firmware_artifacts(
+        &self,
+        context: &AiotRequestContext,
+        params: OffsetListPageParams,
+    ) -> Result<AiotOffsetListResult<AiotFirmwareArtifactRecord>, HttpResponse> {
+        let association = request_context_to_storage_association(context)?;
+        self.firmware_repository
+            .list_published_artifacts_page(&association, params)
+            .map_err(firmware_repository_error_to_response)
+    }
+
+    /// Retrieves one device only when the signed-in user owns it.
+    fn get_owned_device(
+        &self,
+        context: &AiotRequestContext,
+        device_id: &str,
+    ) -> Result<AiotDeviceRecord, HttpResponse> {
+        let association = request_context_to_storage_association(context)?;
+        let owner = Self::owner_scope_for_context(context)?;
+        if let Some(device) =
+            self.device_repository
+                .get_device_by_owner(&association, &owner, device_id)
+        {
+            return Ok(device);
+        }
+        // Tenant administrators provision devices under the tenant-owned
+        // ("device") relation. The user console may read those tenant assets,
+        // but never devices owned by another user.
+        self.device_repository
+            .get_device(&association, device_id)
+            .filter(|device| device.owner_type == "device")
+            .ok_or_else(|| device_not_found_response(device_id))
+    }
+
+    /// Updates the user-editable fields of a device the signed-in user owns.
+    ///
+    /// The console persists the device-to-agent binding in `metadata`
+    /// (`agentId` / `agentName`) and may rename the device; lifecycle status stays
+    /// administrator-owned on the management surface, so it is ignored here.
+    fn update_owned_device(
+        &self,
+        context: &AiotRequestContext,
+        device_id: &str,
+        payload: AiotDeviceUpdatePayload,
+    ) -> Result<AiotDeviceRecord, HttpResponse> {
+        let association = request_context_to_storage_association(context)?;
+        let owner = Self::owner_scope_for_context(context)?;
+        let Some(_) = self.device_repository.get_device_for_user_scope(
+            &association,
+            &owner.owner_id,
+            device_id,
+        ) else {
+            return Err(device_not_found_response(device_id));
+        };
+
+        let display_name = match payload.display_name {
+            Some(display_name) => {
+                let trimmed = display_name.trim();
+                if trimmed.is_empty() {
+                    return Err(problem_response(
+                        HttpStatus::BadRequest,
+                        "api.request.invalid_display_name",
+                        "Device display name must not be empty",
+                    ));
+                }
+                Some(trimmed.to_string())
+            }
+            None => None,
+        };
+
+        let metadata_json = match payload.metadata_json {
+            Some(metadata_json) => {
+                // Metadata carries the agent binding on this surface, so it must
+                // stay a JSON object: a scalar or array would corrupt the device
+                // document for every reader (management console, settings, twin).
+                let parsed: serde_json::Value =
+                    serde_json::from_str(&metadata_json).map_err(|_| {
+                        problem_response(
+                            HttpStatus::BadRequest,
+                            "api.request.invalid_metadata",
+                            "Device metadata must be a JSON object",
+                        )
+                    })?;
+                if !parsed.is_object() {
+                    return Err(problem_response(
+                        HttpStatus::BadRequest,
+                        "api.request.invalid_metadata",
+                        "Device metadata must be a JSON object",
+                    ));
+                }
+                Some(metadata_json)
+            }
+            None => None,
+        };
+
+        if display_name.is_none() && metadata_json.is_none() {
+            return Err(problem_response(
+                HttpStatus::BadRequest,
+                "api.request.update.required",
+                "A display name or a metadata object is required",
+            ));
+        }
+
+        let mut command = AiotDeviceUpdateCommand::new(association, device_id.to_string());
+        if let Some(display_name) = display_name {
+            command = command.with_display_name(display_name);
+        }
+        if let Some(metadata_json) = metadata_json {
+            command = command.with_metadata_json(metadata_json);
+        }
+        self.device_repository
+            .update_device(command)
             .map_err(device_repository_error_to_response)
     }
 
@@ -2993,6 +3251,28 @@ pub fn handle_resolved_api_request(
                 Err(problem) => problem,
             }
         }
+        (AiotApiSurface::App, "products.list") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let page_params = match require_page_params(request) {
+                Ok(params) => params,
+                Err(response) => return response,
+            };
+            match server.list_registration_products(context, page_params) {
+                Ok(page) => standard_product_collection_response(
+                    request,
+                    &page.items,
+                    page_params,
+                    page.total,
+                ),
+                Err(problem) => problem,
+            }
+        }
         (AiotApiSurface::Admin, "products.create") => {
             let Some(context) = request_context else {
                 return problem_response(
@@ -3283,7 +3563,7 @@ pub fn handle_resolved_api_request(
                 Err(problem) => problem,
             }
         }
-        (AiotApiSurface::Admin, "devices.list") | (AiotApiSurface::App, "devices.list") => {
+        (AiotApiSurface::Admin, "devices.list") => {
             let Some(context) = request_context else {
                 return problem_response(
                     HttpStatus::Forbidden,
@@ -3302,6 +3582,63 @@ pub fn handle_resolved_api_request(
                     page_params,
                     page.total,
                 ),
+                Err(problem) => problem,
+            }
+        }
+        (AiotApiSurface::App, "devices.list") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let page_params = match require_page_params(request) {
+                Ok(params) => params,
+                Err(response) => return response,
+            };
+            match server.list_owned_devices(context, page_params) {
+                Ok(page) => standard_device_collection_response(
+                    request,
+                    &page.items,
+                    page_params,
+                    page.total,
+                ),
+                Err(problem) => problem,
+            }
+        }
+        (AiotApiSurface::App, "devices.create") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let payload = match device_create_payload_from_request(request) {
+                Ok(payload) => payload,
+                Err(problem) => return problem,
+            };
+            match server.register_owned_device(context, payload) {
+                Ok(device) => standard_device_response(request, HttpStatus::Created, &device),
+                Err(problem) => problem,
+            }
+        }
+        (AiotApiSurface::App, "devices.update") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let device_id = device_id.as_deref().unwrap_or("unknown-device");
+            let payload = match device_update_payload_from_request(request) {
+                Ok(payload) => payload,
+                Err(problem) => return problem,
+            };
+            match server.update_owned_device(context, device_id, payload) {
+                Ok(device) => standard_device_response(request, HttpStatus::Ok, &device),
                 Err(problem) => problem,
             }
         }
@@ -3542,7 +3879,7 @@ pub fn handle_resolved_api_request(
                 Err(problem) => problem,
             }
         }
-        (AiotApiSurface::Admin, "devices.retrieve") | (AiotApiSurface::App, "devices.retrieve") => {
+        (AiotApiSurface::Admin, "devices.retrieve") => {
             let Some(context) = request_context else {
                 return problem_response(
                     HttpStatus::Forbidden,
@@ -3554,6 +3891,20 @@ pub fn handle_resolved_api_request(
             match server.get_device(context, device_id) {
                 Some(device) => standard_device_response(request, HttpStatus::Ok, &device),
                 None => device_not_found_response(device_id),
+            }
+        }
+        (AiotApiSurface::App, "devices.retrieve") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let device_id = device_id.as_deref().unwrap_or("unknown-device");
+            match server.get_owned_device(context, device_id) {
+                Ok(device) => standard_device_response(request, HttpStatus::Ok, &device),
+                Err(problem) => problem,
             }
         }
         (AiotApiSurface::Admin, "devices.update") => {
@@ -3636,6 +3987,103 @@ pub fn handle_resolved_api_request(
                     problem_detail_from_request(
                         request,
                         "api.device.hardware_tools.invalid_response",
+                        detail,
+                    )
+                }
+                Err(error) => problem_detail_from_request(
+                    request,
+                    "api.device.hardware_tools.unavailable",
+                    format!("{error:?}"),
+                ),
+            }
+        }
+        (AiotApiSurface::Admin, "devices.hardwareTools.execute") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let device_id = device_id.as_deref().unwrap_or("unknown-device");
+            let association = match request_context_to_storage_association(context) {
+                Ok(association) => association,
+                Err(_) => {
+                    return problem_detail_from_request(
+                        request,
+                        "api.context.invalid_tenant_id",
+                        "Resolved tenant context is required",
+                    );
+                }
+            };
+            if server
+                .device_repository
+                .get_device(&association, device_id)
+                .is_none()
+            {
+                return problem_detail_from_request(
+                    request,
+                    "api.device.not_found",
+                    format!("Device {device_id} was not found"),
+                );
+            }
+            let payload = match device_hardware_tool_call_payload_from_request(request) {
+                Ok(payload) => payload,
+                Err(problem) => return problem,
+            };
+            match server.device_hardware_tool_source.invoke_tool(
+                device_id,
+                &payload.tool_name,
+                &payload.arguments_json,
+            ) {
+                Ok(result) => standard_resource_response(
+                    request,
+                    HttpStatus::Ok,
+                    serde_json::json!({
+                        "deviceId": device_id,
+                        "toolName": payload.tool_name,
+                        "result": result,
+                    })
+                    .to_string(),
+                ),
+                Err(AiotDeviceHardwareToolError::Busy(detail)) => problem_detail_with_errors(
+                    request,
+                    HttpStatus::TooManyRequests,
+                    SdkWorkResultCode::RateLimitExceeded,
+                    detail,
+                    &serde_json::json!([]),
+                ),
+                Err(AiotDeviceHardwareToolError::NotFound(detail)) => problem_detail_from_request(
+                    request,
+                    "api.device.hardware_tools.tool_not_found",
+                    detail,
+                ),
+                Err(AiotDeviceHardwareToolError::Timeout(detail)) => problem_detail_from_request(
+                    request,
+                    "api.device.hardware_tools.timeout",
+                    detail,
+                ),
+                Err(AiotDeviceHardwareToolError::InvalidArguments(detail)) => {
+                    problem_detail_with_errors(
+                        request,
+                        HttpStatus::UnprocessableEntity,
+                        SdkWorkResultCode::ValidationError,
+                        detail,
+                        &serde_json::json!([]),
+                    )
+                }
+                Err(AiotDeviceHardwareToolError::DeviceError(detail)) => {
+                    problem_detail_from_request(
+                        request,
+                        "api.device.hardware_tools.device_error",
+                        detail,
+                    )
+                }
+                Err(AiotDeviceHardwareToolError::Unavailable(detail))
+                | Err(AiotDeviceHardwareToolError::InvalidResponse(detail)) => {
+                    problem_detail_from_request(
+                        request,
+                        "api.device.hardware_tools.unavailable",
                         detail,
                     )
                 }
@@ -3909,6 +4357,28 @@ pub fn handle_resolved_api_request(
                 Err(response) => return response,
             };
             match server.list_firmware_artifacts(context, page_params) {
+                Ok(page) => standard_firmware_artifact_collection_response(
+                    request,
+                    &page.items,
+                    page_params,
+                    page.total,
+                ),
+                Err(problem) => problem,
+            }
+        }
+        (AiotApiSurface::App, "firmwareArtifacts.list") => {
+            let Some(context) = request_context else {
+                return problem_response(
+                    HttpStatus::Forbidden,
+                    "api.context.missing",
+                    "Resolved appbase context is required",
+                );
+            };
+            let page_params = match require_page_params(request) {
+                Ok(params) => params,
+                Err(response) => return response,
+            };
+            match server.list_published_firmware_artifacts(context, page_params) {
                 Ok(page) => standard_firmware_artifact_collection_response(
                     request,
                     &page.items,
@@ -7932,4 +8402,62 @@ impl AiotApiError {
     pub fn new(code: impl Into<String>) -> Self {
         Self { code: code.into() }
     }
+}
+
+struct AiotDeviceHardwareToolCallPayload {
+    tool_name: String,
+    arguments_json: String,
+}
+
+fn device_hardware_tool_call_payload_from_request(
+    request: &HttpRequest,
+) -> Result<AiotDeviceHardwareToolCallPayload, HttpResponse> {
+    if request.body.iter().all(|byte| byte.is_ascii_whitespace()) {
+        return Err(problem_response(
+            HttpStatus::BadRequest,
+            "api.request.body.required",
+            "Request body is required",
+        ));
+    }
+    let body: JsonValue = serde_json::from_slice(&request.body).map_err(|_| {
+        problem_response(
+            HttpStatus::BadRequest,
+            "api.request.invalid_json",
+            "Request body must be valid JSON",
+        )
+    })?;
+    let obj = body.as_object().ok_or_else(|| {
+        problem_response(
+            HttpStatus::BadRequest,
+            "api.request.invalid_json_object",
+            "Request body must be a JSON object",
+        )
+    })?;
+    let tool_name = optional_json_string_field(obj, "toolName")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            problem_response(
+                HttpStatus::BadRequest,
+                "api.request.missing_field",
+                "toolName is required",
+            )
+        })?;
+    let arguments_json = match obj.get("arguments") {
+        None | Some(JsonValue::Null) => "{}".to_string(),
+        Some(JsonValue::Object(_)) => obj["arguments"].to_string(),
+        Some(_) => {
+            return Err(problem_detail_with_errors(
+                request,
+                HttpStatus::UnprocessableEntity,
+                SdkWorkResultCode::ValidationError,
+                "arguments must be a JSON object",
+                &serde_json::json!([]),
+            ));
+        }
+    };
+    Ok(AiotDeviceHardwareToolCallPayload {
+        tool_name,
+        arguments_json,
+    })
 }

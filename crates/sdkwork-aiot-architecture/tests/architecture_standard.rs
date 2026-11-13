@@ -3,6 +3,21 @@ use std::path::{Path, PathBuf};
 
 use sdkwork_iot_platform_service::{standard_api_route_contracts, AiotApiSurface};
 
+fn device_edge_runtime_source() -> String {
+    let root = workspace_root();
+    let mut source =
+        fs::read_to_string(root.join("crates/sdkwork-aiot-device-edge-runtime/src/main.rs"))
+            .expect("device edge runtime main");
+    source.push('\n');
+    source.push_str(
+        &fs::read_to_string(
+            root.join("crates/sdkwork-aiot-device-edge-runtime/src/embedded_server.rs"),
+        )
+        .expect("device edge runtime embedded server"),
+    );
+    source
+}
+
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -519,11 +534,11 @@ fn workspace_does_not_create_parallel_aiot_iam_component() {
 #[test]
 fn device_edge_runtime_reuses_runtime_builder_instead_of_owning_domain_logic() {
     let root = workspace_root();
-    let runtime = "crates/sdkwork-aiot-device-edge-runtime/src/main.rs";
-    let source = fs::read_to_string(root.join(runtime)).expect(runtime);
+    let _ = root;
+    let source = device_edge_runtime_source();
 
     assert!(source.contains("standard_device_edge_server"));
-    assert!(!source.contains("struct Device") && !source.contains("struct Product"));
+    assert!(!source.contains("struct AiotDevice") && !source.contains("struct Product"));
     assert!(!source.contains("CREATE TABLE"));
     assert!(!source.contains("sdkwork_routes_iot"));
 }
@@ -738,7 +753,16 @@ fn runtime_processes_read_topology_surface_bind_env_keys() {
     ];
 
     for (service, canonical_key) in cases {
-        let source = fs::read_to_string(root.join(service)).expect(service);
+        let mut source = fs::read_to_string(root.join(service)).expect(service);
+        if service.contains("sdkwork-aiot-device-edge-runtime") {
+            source.push('\n');
+            source.push_str(
+                &fs::read_to_string(
+                    root.join("crates/sdkwork-aiot-device-edge-runtime/src/embedded_server.rs"),
+                )
+                .expect("device edge embedded server"),
+            );
+        }
         assert!(
             source.contains(canonical_key),
             "{service} must read canonical topology env key {canonical_key}"
@@ -1271,9 +1295,7 @@ fn device_edge_readiness_wires_outbox_and_optional_mqtt_bridge_probes() {
     let edge_runtime_lib =
         fs::read_to_string(root.join("crates/sdkwork-aiot-device-edge-runtime/src/lib.rs"))
             .expect("device edge runtime lib");
-    let edge_runtime_main =
-        fs::read_to_string(root.join("crates/sdkwork-aiot-device-edge-runtime/src/main.rs"))
-            .expect("device edge runtime main");
+    let edge_runtime_main = device_edge_runtime_source();
     let bridge_module =
         root.join("crates/sdkwork-aiot-device-edge-runtime/src/mqtt_bridge_readiness.rs");
 

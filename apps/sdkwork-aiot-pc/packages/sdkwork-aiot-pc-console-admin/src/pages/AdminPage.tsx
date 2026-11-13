@@ -294,8 +294,14 @@ export function SdkworkAdminPage({
             ) : null}
             {state.settings ? (
               <SdkworkDeviceHardwareToolsPanel
-                error={state.hardwareToolsError}
+                error={state.hardwareToolError ?? state.hardwareToolsError}
+                invocation={state.hardwareToolInvocation}
+                invokingToolName={state.invokingHardwareTool}
                 isLoading={state.isLoadingHardwareTools}
+                notice={state.hardwareToolNotice}
+                onInvoke={(toolName, argumentsText) =>
+                  controller.invokeHardwareTool(toolName, argumentsText)
+                }
                 onRefresh={() => void controller.refreshHardwareTools()}
                 tools={state.hardwareTools}
               />

@@ -43,6 +43,21 @@ pub fn unregister_active_ws_session(device_id: &str) {
     }
 }
 
+/// Unregisters only when the caller still owns the live session.
+///
+/// A device may reconnect before its previous socket finishes closing; the old
+/// guard must not evict the new session.
+pub fn unregister_active_ws_session_if(device_id: &str, session_id: &str) {
+    if let Ok(mut guard) = store().lock() {
+        let matches = guard
+            .get(device_id)
+            .is_some_and(|session| session.session_id == session_id);
+        if matches {
+            guard.remove(device_id);
+        }
+    }
+}
+
 pub fn push_ws_command_replies(device_id: &str, replies: Vec<WebSocketSessionReply>) -> bool {
     let Ok(guard) = store().lock() else {
         return false;
@@ -123,11 +138,37 @@ mod tests {
         ));
         let replies = receiver.recv().expect("outbound");
         assert_eq!(replies.len(), 1);
-        assert_eq!(active_ws_device_ids(), vec!["dev-test"]);
+        assert!(active_ws_device_ids().contains(&"dev-test".to_string()));
         assert_eq!(
             active_ws_session_id("dev-test").as_deref(),
             Some("session-test")
         );
         unregister_active_ws_session("dev-test");
+    }
+
+    #[test]
+    fn stale_guard_does_not_evict_reconnected_session() {
+        unregister_active_ws_session("dev-reconnect");
+        let (old_sender, _old_receiver) = std::sync::mpsc::channel();
+        register_active_ws_session(
+            "dev-reconnect",
+            "session-old",
+            old_sender,
+            AiotStorageAssociation::default(),
+        );
+        let (new_sender, _new_receiver) = std::sync::mpsc::channel();
+        register_active_ws_session(
+            "dev-reconnect",
+            "session-new",
+            new_sender,
+            AiotStorageAssociation::default(),
+        );
+        unregister_active_ws_session_if("dev-reconnect", "session-old");
+        assert_eq!(
+            active_ws_session_id("dev-reconnect").as_deref(),
+            Some("session-new")
+        );
+        unregister_active_ws_session_if("dev-reconnect", "session-new");
+        assert!(active_ws_session_id("dev-reconnect").is_none());
     }
 }

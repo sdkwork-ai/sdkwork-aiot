@@ -107,6 +107,11 @@ function createService(): SdkworkAdminService {
       })),
     })),
     getDeviceSettings: vi.fn(async (deviceId: string) => settingsFor(deviceId)),
+    invokeHardwareTool: vi.fn(async (deviceId: string, toolName: string) => ({
+      deviceId,
+      result: { content: [{ text: "ok", type: "text" }] },
+      toolName,
+    })),
     listHardwareTools: vi.fn(async (deviceId: string) => ({
       deviceId,
       discovered: true,
@@ -161,6 +166,35 @@ describe("sdkwork-aiot-pc-console-admin controller", () => {
     expect(service.listHardwareTools).toHaveBeenCalledWith("device-a");
     expect(state.hardwareTools?.online).toBe(true);
     expect(state.hardwareTools?.tools[0]?.name).toBe("self.audio_speaker.set_volume");
+  });
+
+
+  it("invokes a hardware tool with parsed arguments and surfaces invalid JSON", async () => {
+    const service = createService();
+    const controller = createSdkworkAdminController({ service });
+    await controller.bootstrap();
+
+    const ok = await controller.invokeHardwareTool(
+      "self.audio_speaker.set_volume",
+      '{"volume": 30}',
+    );
+    expect(ok).toBe(true);
+    expect(service.invokeHardwareTool).toHaveBeenCalledWith(
+      "device-a",
+      "self.audio_speaker.set_volume",
+      { volume: 30 },
+    );
+    expect(controller.getState().hardwareToolInvocation?.toolName).toBe(
+      "self.audio_speaker.set_volume",
+    );
+    expect(controller.getState().hardwareToolNotice).toContain("调用完成");
+
+    const invalid = await controller.invokeHardwareTool(
+      "self.audio_speaker.set_volume",
+      "[1,2]",
+    );
+    expect(invalid).toBe(false);
+    expect(controller.getState().hardwareToolError).toContain("JSON object");
   });
 
   it("filters devices by search and health and selects another device", async () => {

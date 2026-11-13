@@ -73,6 +73,78 @@
             }
           }
         ]
+      },
+      "post": {
+        "tags": [
+          "iot"
+        ],
+        "operationId": "devices.create",
+        "x-sdkwork-required-permission": "iot.devices.write",
+        "summary": "Register a device owned by the signed-in user",
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiotDeviceCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Device registered.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "required": [
+                            "item"
+                          ],
+                          "properties": {
+                            "item": {
+                              "$ref": "#/components/schemas/AiotDevice"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api",
+        "x-sdkwork-owner": "sdkwork-aiot",
+        "x-sdkwork-api-authority": "sdkwork-aiot-app-api",
+        "x-sdkwork-idempotent": true
       }
     },
     "/app/v3/api/iot/devices/{deviceId}": {
@@ -136,6 +208,81 @@
         },
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api"
+      },
+      "put": {
+        "tags": [
+          "iot"
+        ],
+        "operationId": "devices.update",
+        "x-sdkwork-required-permission": "iot.devices.write",
+        "summary": "Update metadata of a device owned by the signed-in user",
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiotDeviceUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated device.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "required": [
+                            "item"
+                          ],
+                          "properties": {
+                            "item": {
+                              "$ref": "#/components/schemas/AiotDevice"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api",
+        "x-sdkwork-owner": "sdkwork-aiot",
+        "x-sdkwork-api-authority": "sdkwork-aiot-app-api",
+        "x-sdkwork-idempotent": true
       }
     },
     "/app/v3/api/iot/devices/{deviceId}/commands": {
@@ -357,6 +504,122 @@
         },
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api"
+      }
+    },
+    "/app/v3/api/iot/products": {
+      "get": {
+        "tags": [
+          "iot"
+        ],
+        "operationId": "products.list",
+        "x-sdkwork-required-permission": "iot.products.read",
+        "summary": "List products available for user device registration",
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "One-based page index.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Page size (max 200).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product collection.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api",
+        "x-sdkwork-owner": "sdkwork-aiot",
+        "x-sdkwork-api-authority": "sdkwork-aiot-app-api"
+      }
+    },
+    "/app/v3/api/iot/firmware_artifacts": {
+      "get": {
+        "tags": [
+          "iot"
+        ],
+        "operationId": "firmwareArtifacts.list",
+        "x-sdkwork-required-permission": "iot.firmware.read",
+        "summary": "List published firmware artifacts",
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "One-based page index.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Page size (max 200).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Firmware artifact collection.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api",
+        "x-sdkwork-owner": "sdkwork-aiot",
+        "x-sdkwork-api-authority": "sdkwork-aiot-app-api"
       }
     }
   },
@@ -1288,6 +1551,56 @@
             }
           }
         ]
+      },
+      "AiotDeviceCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "deviceId",
+          "displayName",
+          "productId"
+        ],
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "productId": {
+            "type": "string",
+            "maxLength": 19,
+            "pattern": "^[0-9]+$",
+            "description": "int64-as-string product identifier."
+          },
+          "clientId": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "chipFamily": {
+            "type": "string",
+            "maxLength": 64
+          }
+        }
+      },
+      "AiotDeviceUpdateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/JsonValue"
+          }
+        }
       }
     }
   }

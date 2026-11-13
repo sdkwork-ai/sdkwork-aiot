@@ -3,18 +3,16 @@
   "generator": "@sdkwork/sdk-generator",
   "sdk": {
     "name": "sdkwork-aiot-backend-sdk",
-    "version": "0.1.15",
+    "version": "0.1.18",
     "language": "typescript",
     "sdkType": "backend",
     "protocol": "http",
     "packageName": "@sdkwork/aiot-backend-sdk"
   },
-  "changeFingerprint": "f6fea866a3efd12a67c334e6b974168189e95de78089cd7c51977c870407f6fb",
+  "changeFingerprint": "e839673d7234d794172b5b51004a0a798d0ed5f9312560f403832d9681818fdf",
   "changes": {
     "createdGeneratedFiles": [
-      "src/types/aiot-device-hardware-tool.ts",
-      "src/types/aiot-device-hardware-tools.ts",
-      "src/types/devices-hardware-tools-list-response.ts"
+      "src/types/devices-hardware-tools-execute-response.ts"
     ],
     "updatedGeneratedFiles": [
       "CHANGELOG.md",
@@ -50,6 +48,10 @@
       "src/types/aiot-credential-response.ts",
       "src/types/aiot-device-auth-mode.ts",
       "src/types/aiot-device-create-request.ts",
+      "src/types/aiot-device-hardware-tool-call-request.ts",
+      "src/types/aiot-device-hardware-tool-call-result.ts",
+      "src/types/aiot-device-hardware-tool.ts",
+      "src/types/aiot-device-hardware-tools.ts",
       "src/types/aiot-device-setting-definition.ts",
       "src/types/aiot-device-setting-kind.ts",
       "src/types/aiot-device-setting-map.ts",
@@ -98,6 +100,7 @@
       "src/types/devices-create-response201.ts",
       "src/types/devices-credentials-create-response201.ts",
       "src/types/devices-credentials-retrieve-response.ts",
+      "src/types/devices-hardware-tools-list-response.ts",
       "src/types/devices-retrieve-response.ts",
       "src/types/devices-settings-retrieve-response.ts",
       "src/types/devices-settings-rollback-response.ts",
@@ -141,7 +144,9 @@
       "src/types/sdk-work-resource-response.ts",
       "tsconfig.json"
     ],
-    "deletedGeneratedFiles": [],
+    "deletedGeneratedFiles": [
+      "src/types/devices-hardware-tools-invoke-response.ts"
+    ],
     "scaffoldedFiles": [],
     "preservedScaffoldFiles": [
       "custom/build-runtime.mjs",
@@ -167,9 +172,8 @@
       {
         "area": "models",
         "paths": [
-          "src/types/aiot-device-hardware-tool.ts",
-          "src/types/aiot-device-hardware-tools.ts",
-          "src/types/devices-hardware-tools-list-response.ts",
+          "src/types/devices-hardware-tools-execute-response.ts",
+          "src/types/devices-hardware-tools-invoke-response.ts",
           "src/types/index.ts"
         ]
       },
@@ -235,12 +239,14 @@
   },
   "executionDecision": {
     "schemaVersion": 1,
-    "riskLevel": "medium",
+    "riskLevel": "high",
     "nextAction": "verify",
     "requiresManualReview": false,
     "applyRequiresExpectedFingerprint": false,
     "summary": "Changes have been applied. Run the required verification plan now.",
     "reasons": [
+      "deleted-generated-files",
+      "manual-review-required",
       "verification-required"
     ]
   },
