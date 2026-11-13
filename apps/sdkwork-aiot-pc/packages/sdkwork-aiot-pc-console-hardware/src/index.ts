@@ -1,13 +1,37 @@
 /**
  * Smart Hardware console public surface (SDKWork AIoT user console).
  *
- * The view is host-agnostic: it renders from a `ConsoleHardwareService` port and a
- * copy override, so both the AIoT application shell and an embedding host (the
- * Cloud Router user console) compose it without sharing transport code. The
- * default service binding lives in `./service` so a host that injects its own
- * client never pulls the AIoT PC runtime.
+ * Two independent pages, one per URL:
+ *
+ * - `SdkworkHardwareDevicesPage`   -> `/console/hardware` (my devices, binding)
+ * - `SdkworkHardwareFirmwarePage`  -> `/console/hardware/firmware` (downloads)
+ *
+ * Both pages render from a `ConsoleHardwareService` port and a copy override, so
+ * an embedding host composes them without sharing transport code. The default
+ * service binding lives in `./service-default` and is imported lazily: a host that
+ * injects its own client never pulls the AIoT PC runtime.
  */
-export { SdkworkHardwareConsole, type SdkworkHardwareConsoleProps, type ConsoleHardwareScreen } from './hardware-console.tsx';
+export {
+  SdkworkHardwareDevicesPage,
+  type SdkworkHardwareDevicesPageProps,
+} from './devices-page.tsx';
+export {
+  SdkworkHardwareFirmwarePage,
+  type SdkworkHardwareFirmwarePageProps,
+} from './firmware-page.tsx';
+export {
+  HEALTH_TONE,
+  HardwarePageShell,
+  Panel,
+  PrimaryButton,
+  RegisterDrawer,
+  SecondaryButton,
+  StatTile,
+  type ConsoleHardwareScreen,
+  type HardwarePageErrorState,
+  type HardwarePageShellProps,
+  type RegisterDrawerProps,
+} from './hardware-console-chrome.tsx';
 export {
   HARDWARE_CONSOLE_COPY_EN,
   formatHardwareConsoleCopy,

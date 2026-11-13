@@ -46,18 +46,25 @@ CREATE INDEX IF NOT EXISTS idx_iot_device_tenant_owner
 
 ## 3. PC 设计
 
-`sdkwork-aiot-pc-console-hardware` 提供可组合的控制台组件：
+`sdkwork-aiot-pc-console-hardware` 提供**两个独立页面**，各自一条 URL，各自只加载自己的数据：
+
+| URL | 页面组件 | 内容 |
+| --- | --- | --- |
+| `/console/hardware/devices` | `SdkworkHardwareDevicesPage` | 我的硬件：统计、检索、设备卡片、详情面板、注册、改名、智能体绑定、分页 |
+| `/console/hardware/firmware` | `SdkworkHardwareFirmwarePage` | 固件下载：检索、校验值/目标芯片/状态、直链下载或受管下发、分页 |
 
 ```tsx
-import { SdkworkHardwareConsole } from '@sdkwork/aiot-pc-console-hardware';
+import { SdkworkHardwareDevicesPage, SdkworkHardwareFirmwarePage } from '@sdkwork/aiot-pc-console-hardware';
 
-<SdkworkHardwareConsole canManage initialScreen="devices" />
+<SdkworkHardwareDevicesPage canManage onNavigate={(screen) => navigate(...)} />
+<SdkworkHardwareFirmwarePage onNavigate={(screen) => navigate(...)} />
 ```
 
-- **界面**：我的硬件（统计、检索、设备卡片、设备详情面板 + 智能体绑定 + 设备改名、分页加载）、固件下载（校验值、目标芯片、直链下载 / 受管下发、分页加载）。
-- **组合契约**：`canManage`（是否有 `iot.devices.write`，决定注册与绑定入口）、`copy`（宿主语言包）、`initialScreen`（深链）、`service`（宿主注入的端口实现）。
-- **依赖倒置**：`. ` 入口不引用 AIoT PC 运行时；默认服务绑定在 `./service-default`，由界面按需 `import()`。宿主注入自己的 `ConsoleHardwareService` 时不会把 AIoT 应用运行时打进宿主包。
-- **AIoT 应用内**：`apps/sdkwork-aiot-pc/src/App.tsx` 已挂载 `/hardware` 导航项，直接使用默认服务（`getAiotAppSdkClient()`）。
+- **页面分离而非同页切换**：设备页不请求固件目录，固件页不请求设备/智能体目录；共享的只有页框（标题、操作位、跨页导航、错误/提示/加载）——由 `HardwarePageShell` 提供。
+- **组合契约**：`canManage`（是否有 `iot.devices.write`，决定注册/改名/绑定入口）、`copy`（宿主语言包）、`onNavigate`（宿主负责真实路由跳转）、`className`（宿主 gutter/高度）、`service`（宿主注入的端口实现）。
+- **依赖倒置**：`. ` 入口不引用 AIoT PC 运行时；默认服务绑定在 `./service-default`，由 `useConsoleHardwareService` 按需 `import()`。宿主注入自己的 `ConsoleHardwareService` 时不会把 AIoT 应用运行时打进宿主包。
+- **深色主题**：两个页面所有表面（卡片/面板/表格/输入/按钮/徽章/抽屉/遮罩）都带 `dark:` 变体，随 Console Shell 的 `dark` 类切换；浅色主题保持原观感。
+- **AIoT 应用内**：`apps/sdkwork-aiot-pc/src/App.tsx` 挂载 `/hardware/devices`（我的硬件）与 `/hardware/firmware`（固件下载）两个导航项，各自渲染对应页面。
 
 ## 4. 宿主组合（Cloud Router 用户控制台）
 

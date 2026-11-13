@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Bot, CircuitBoard, Cpu, Mic, RadioTower, ShieldCheck } from 'lucide-react';
+import { Bot, CircuitBoard, Cpu, Download, Mic, RadioTower, ShieldCheck } from 'lucide-react';
 import { SdkworkAdminPage } from '@sdkwork/aiot-pc-console-admin';
 import { SdkworkAgentPage } from '@sdkwork/aiot-pc-console-agent';
 import { SdkworkDevicePage } from '@sdkwork/aiot-pc-console-device';
-import { SdkworkHardwareConsole } from '@sdkwork/aiot-pc-console-hardware';
+import { SdkworkHardwareDevicesPage, SdkworkHardwareFirmwarePage } from '@sdkwork/aiot-pc-console-hardware';
 import { SdkworkIotPage } from '@sdkwork/aiot-pc-console-iot';
 import { SdkworkVoicePage } from '@sdkwork/aiot-pc-console-voice';
 import { initAiotAppSdkClient, initAiotBackendSdkClient, initAgentsAppSdkClient, initDriveAppSdkClient, initVoiceAppSdkClient } from '@sdkwork/aiot-pc-core';
 
-type AiotRoute = '/devices' | '/iot' | '/hardware' | '/admin' | '/voice' | '/agent';
+type AiotRoute = '/devices' | '/iot' | '/hardware/devices' | '/hardware/firmware' | '/admin' | '/voice' | '/agent';
 
 const NAV_ITEMS: Array<{ icon: typeof Cpu; id: AiotRoute; label: string }> = [
   { icon: Cpu, id: '/devices', label: '设备' },
-  { icon: CircuitBoard, id: '/hardware', label: '智能硬件' },
+  { icon: CircuitBoard, id: '/hardware/devices', label: '智能硬件' },
+  { icon: Download, id: '/hardware/firmware', label: '固件下载' },
   { icon: RadioTower, id: '/iot', label: 'IoT 舰队' },
   { icon: ShieldCheck, id: '/admin', label: '设备管理' },
   { icon: Mic, id: '/voice', label: '语音对话' },
@@ -20,8 +21,12 @@ const NAV_ITEMS: Array<{ icon: typeof Cpu; id: AiotRoute; label: string }> = [
 ];
 
 function resolveRouteIntent(route: string): AiotRoute {
+  if (route.startsWith('/hardware/firmware')) {
+    return '/hardware/firmware';
+  }
   if (route.startsWith('/hardware')) {
-    return '/hardware';
+    // The group root and the device registry path both land on the registry page.
+    return '/hardware/devices';
   }
   if (route.startsWith('/iot')) {
     return '/iot';
@@ -100,8 +105,22 @@ export function App() {
         </div>
 
         {route === '/devices' ? <SdkworkDevicePage onNavigate={handleNavigate} /> : null}
-        {route === '/hardware' ? (
-          <SdkworkHardwareConsole canManage className="px-4 py-4 sm:px-6 sm:py-5" />
+        {route === '/hardware/devices' ? (
+          <SdkworkHardwareDevicesPage
+            canManage
+            className="px-4 py-4 sm:px-6 sm:py-5"
+            onNavigate={(screen) =>
+              handleNavigate(screen === 'firmware' ? '/hardware/firmware' : '/hardware/devices')
+            }
+          />
+        ) : null}
+        {route === '/hardware/firmware' ? (
+          <SdkworkHardwareFirmwarePage
+            className="px-4 py-4 sm:px-6 sm:py-5"
+            onNavigate={(screen) =>
+              handleNavigate(screen === 'firmware' ? '/hardware/firmware' : '/hardware/devices')
+            }
+          />
         ) : null}
         {route === '/iot' ? <SdkworkIotPage onNavigate={handleNavigate} /> : null}
         {route === '/admin' ? <SdkworkAdminPage onNavigate={handleNavigate} /> : null}
