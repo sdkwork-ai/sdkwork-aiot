@@ -22,6 +22,14 @@ import {
 export interface SdkworkHardwareConsoleProps {
   /** Registers/binds devices; hosts without the IoT write grant hide those actions. */
   canManage?: boolean;
+  /**
+   * Host layout hook (padding, height, grid placement).
+   *
+   * The console itself does not add outer gutters or a max width: the console
+   * shell owns those, so the content stretches to the available width exactly like
+   * the Memory console. A standalone host passes its own page padding here.
+   */
+  className?: string;
   /** Host copy overrides (localized labels); defaults to English. */
   copy?: Partial<HardwareConsoleCopy>;
   /** Deep link target for the first paint (hosts map their route to this). */
@@ -89,6 +97,7 @@ function SecondaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
 
 export function SdkworkHardwareConsole({
   canManage = false,
+  className,
   copy: copyOverrides,
   initialScreen,
   service,
@@ -375,8 +384,10 @@ export function SdkworkHardwareConsole({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
-      <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-4">
+    <div
+      className={`flex h-full min-h-0 w-full min-w-0 flex-col gap-4 overflow-y-auto ${className ?? ''}`.trim()}
+    >
+      <div className="flex w-full min-w-0 flex-col gap-4">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">{copy.title}</h1>
@@ -517,7 +528,7 @@ export function SdkworkHardwareConsole({
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <StatTile label={copy.statTotal} value={String(Math.max(deviceTotal, devices.length))} />
               <StatTile label={copy.statOnline} value={String(health.healthy)} tone="text-emerald-600" />
               <StatTile
@@ -556,8 +567,8 @@ export function SdkworkHardwareConsole({
                 </div>
               </Panel>
             ) : (
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(22rem,0.9fr)]">
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,26rem)]">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))] gap-3">
                   {visibleDevices.map((device) => (
                     <button
                       key={device.deviceId}
