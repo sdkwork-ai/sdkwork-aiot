@@ -100,7 +100,9 @@ export function App() {
         </div>
 
         {route === '/devices' ? <SdkworkDevicePage onNavigate={handleNavigate} /> : null}
-        {route === '/hardware' ? <SdkworkHardwareConsole canManage /> : null}
+        {route === '/hardware' ? (
+          <SdkworkHardwareConsole canManage className="px-4 py-4 sm:px-6 sm:py-5" />
+        ) : null}
         {route === '/iot' ? <SdkworkIotPage onNavigate={handleNavigate} /> : null}
         {route === '/admin' ? <SdkworkAdminPage onNavigate={handleNavigate} /> : null}
         {route === '/voice' ? <SdkworkVoicePage /> : null}
