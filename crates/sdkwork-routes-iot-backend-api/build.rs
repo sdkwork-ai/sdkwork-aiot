@@ -26,6 +26,8 @@ struct RouteManifestRoute {
 #[derive(Debug, Deserialize)]
 struct RouteManifestAuth {
     mode: String,
+    #[serde(default)]
+    permission: Option<String>,
 }
 
 fn main() {
@@ -96,6 +98,9 @@ fn render_route(route: &RouteManifestRoute) -> String {
             ".with_rate_limit_tier({})",
             rate_limit_tier_expr(tier)
         ));
+    }
+    if let Some(permission) = route.auth.permission.as_deref() {
+        line.push_str(&format!(".with_required_permission({permission:?})"));
     }
     line.push_str(",\n");
     line

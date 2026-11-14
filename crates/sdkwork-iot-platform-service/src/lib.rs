@@ -4575,11 +4575,23 @@ fn enforce_route_permission(
         ));
     };
 
-    if ctx.has_permission(route.required_permission) {
+    if permission_scope_authorizes(&ctx.permission_scope, route.required_permission) {
         Ok(())
     } else {
         Err(permission_denied_response(route.required_permission))
     }
+}
+
+/// Authorizes a route permission with the platform permission grammar.
+///
+/// `AiotRequestContext::has_permission` compares candidate codes literally, but
+/// SDKWork grants authority through `*`, `{domain}.*`, and `*.{action}`
+/// patterns (PERMISSION_STANDARD_SPEC). A literal comparison denies
+/// `platform_super_admin` (`*`), `iot_platform_admin` (`iot.*`), and
+/// `org_auditor` (`*.read`) every AIoT route, so the gate must use the shared
+/// wildcard-aware matcher instead of string equality.
+fn permission_scope_authorizes(permission_scope: &[String], required: &str) -> bool {
+    sdkwork_web_core::request_context::permission_scope_matches_any(permission_scope, required)
 }
 
 fn route_path_matches(template: &str, path: &str) -> bool {
@@ -8460,4 +8472,60 @@ fn device_hardware_tool_call_payload_from_request(
         tool_name,
         arguments_json,
     })
+}
+
+#[cfg(test)]
+mod permission_scope_tests {
+    use super::permission_scope_authorizes;
+
+    fn scope(codes: &[&str]) -> Vec<String> {
+        codes.iter().map(|code| (*code).to_string()).collect()
+    }
+
+    #[test]
+    fn super_admin_wildcard_authorizes_every_iot_permission() {
+        let granted = scope(&["*"]);
+        for required in [
+            "iot.profiles.read",
+            "iot.devices.read",
+            "iot.commands.execute",
+            "iot.firmware.rollout",
+        ] {
+            assert!(
+                permission_scope_authorizes(&granted, required),
+                "the platform super-admin wildcard must authorize {required}"
+            );
+        }
+    }
+
+    #[test]
+    fn domain_wildcard_authorizes_its_own_domain() {
+        let granted = scope(&["iot.*"]);
+        assert!(permission_scope_authorizes(&granted, "iot.profiles.read"));
+        assert!(permission_scope_authorizes(&granted, "iot.devices.write"));
+        assert!(!permission_scope_authorizes(
+            &granted,
+            "commerce.orders.read"
+        ));
+        assert!(!permission_scope_authorizes(&granted, "ai.agents.read"));
+    }
+
+    #[test]
+    fn action_wildcard_authorizes_every_read_permission() {
+        let granted = scope(&["*.read"]);
+        assert!(permission_scope_authorizes(&granted, "iot.profiles.read"));
+        assert!(permission_scope_authorizes(&granted, "iot.telemetry.read"));
+        assert!(!permission_scope_authorizes(
+            &granted,
+            "iot.commands.execute"
+        ));
+    }
+
+    #[test]
+    fn explicit_codes_stay_literal() {
+        let granted = scope(&["iot.profiles.read"]);
+        assert!(permission_scope_authorizes(&granted, "iot.profiles.read"));
+        assert!(!permission_scope_authorizes(&granted, "iot.profiles.write"));
+        assert!(!permission_scope_authorizes(&[], "iot.profiles.read"));
+    }
 }
