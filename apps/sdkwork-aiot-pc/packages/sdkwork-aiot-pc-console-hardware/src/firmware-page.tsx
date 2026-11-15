@@ -28,6 +28,20 @@ export interface SdkworkHardwareFirmwarePageProps {
 
 const FIRMWARE_PAGE_SIZE = 50;
 
+/** Localizes the artifact lifecycle status the service returns as a wire code. */
+function firmwareStatusLabel(status: string, copy: HardwareConsoleCopy): string {
+  switch (status.trim().toLowerCase()) {
+    case 'published':
+      return copy.statusPublished;
+    case 'draft':
+      return copy.statusDraft;
+    case 'deprecated':
+      return copy.statusDeprecated;
+    default:
+      return status;
+  }
+}
+
 /**
  * Smart Hardware — firmware downloads page (`/console/hardware/firmware`).
  *
@@ -128,6 +142,7 @@ export function SdkworkHardwareFirmwarePage({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={copy.searchFirmware}
+          aria-label={copy.searchFirmware}
           className="w-full max-w-sm rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 shadow-sm outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
         />
         <Panel>
@@ -169,7 +184,7 @@ export function SdkworkHardwareFirmwarePage({
                       </td>
                       <td className="px-4 py-2.5">
                         <span className="rounded-full border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                          {artifact.status}
+                          {firmwareStatusLabel(artifact.status, copy)}
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-right">
@@ -178,6 +193,7 @@ export function SdkworkHardwareFirmwarePage({
                             href={artifact.downloadUrl}
                             target="_blank"
                             rel="noreferrer noopener"
+                            download={artifact.fileName || undefined}
                             className="text-xs font-semibold text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300"
                           >
                             {copy.download}

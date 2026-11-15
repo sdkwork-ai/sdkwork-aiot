@@ -10,10 +10,21 @@ import type { ConsoleHardwareErrorKey } from './hardware-service.ts';
  */
 export interface HardwareConsoleCopy {
   agentBound: string;
+  agentCreateHint: string;
+  agentCreateOption: string;
+  agentDefaultName: string;
   agentDescription: string;
   agentEmpty: string;
+  agentEmptyCreate: string;
+  agentModeExisting: string;
+  agentModeNew: string;
+  agentModeNone: string;
+  agentNameLabel: string;
+  agentNamePlaceholder: string;
   agentNone: string;
+  agentPartialFailure: string;
   agentReadOnly: string;
+  agentRequired: string;
   agentSave: string;
   agentSaved: string;
   agentSelect: string;
@@ -50,16 +61,19 @@ export interface HardwareConsoleCopy {
   healthOffline: string;
   healthWarning: string;
   identityTitle: string;
+  justNow: string;
   lastSeen: string;
   loading: string;
   loadMore: string;
   managedOnly: string;
+  neverConnected: string;
   noMatches: string;
   noProducts: string;
   openDevice: string;
   productColumn: string;
   productHint: string;
   productLabel: string;
+  productsLoading: string;
   readOnlyHint: string;
   refresh: string;
   register: string;
@@ -78,6 +92,9 @@ export interface HardwareConsoleCopy {
   statBound: string;
   statOnline: string;
   statTotal: string;
+  statusDeprecated: string;
+  statusDraft: string;
+  statusPublished: string;
   tabDevices: string;
   tabFirmware: string;
   title: string;
@@ -85,11 +102,23 @@ export interface HardwareConsoleCopy {
 
 export const HARDWARE_CONSOLE_COPY_EN: HardwareConsoleCopy = {
   agentBound: 'Operated by {{name}}',
+  agentCreateHint: 'A private agent is created and bound to this device.',
+  agentCreateOption: 'Create a new agent...',
+  agentDefaultName: "{{name}}'s agent",
   agentDescription:
     'The agent that operates this device. Ask it to report state, run a routine, or explain an alert.',
   agentEmpty: 'No agent bound',
+  agentEmptyCreate: 'No agent yet — create one here.',
+  agentModeExisting: 'Bind existing',
+  agentModeNew: 'Create new',
+  agentModeNone: 'Do not bind',
+  agentNameLabel: 'New agent name',
+  agentNamePlaceholder: 'e.g. Living room assistant',
   agentNone: 'No agent',
+  agentPartialFailure:
+    'The device was registered, but its agent could not be created or bound. Open the device to bind one again.',
   agentReadOnly: 'Your account can view the binding but cannot change it.',
+  agentRequired: 'Select an agent, or switch the binding off.',
   agentSave: 'Save binding',
   agentSaved: 'Agent binding saved.',
   agentSelect: 'Agent',
@@ -134,16 +163,19 @@ export const HARDWARE_CONSOLE_COPY_EN: HardwareConsoleCopy = {
   healthOffline: 'Offline',
   healthWarning: 'Warning',
   identityTitle: 'Device identity',
+  justNow: 'Just now',
   lastSeen: 'Last seen',
   loading: 'Loading your hardware...',
   loadMore: 'Load more',
   managedOnly: 'Managed delivery',
+  neverConnected: 'Never connected',
   noMatches: 'Nothing matches the current search.',
   noProducts: 'No product is available to register against.',
   openDevice: 'Open device',
   productColumn: 'Product',
   productHint: 'The product defines the capability model and settings schema.',
   productLabel: 'Product',
+  productsLoading: 'Loading products...',
   readOnlyHint: 'Your account can view devices but cannot register them.',
   refresh: 'Refresh',
   register: 'Register device',
@@ -162,6 +194,9 @@ export const HARDWARE_CONSOLE_COPY_EN: HardwareConsoleCopy = {
   statBound: 'Agent bound',
   statOnline: 'Online',
   statTotal: 'My devices',
+  statusDeprecated: 'Deprecated',
+  statusDraft: 'Draft',
+  statusPublished: 'Published',
   tabDevices: 'My hardware',
   tabFirmware: 'Firmware downloads',
   title: 'Smart Hardware',

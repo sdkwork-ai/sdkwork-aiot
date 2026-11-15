@@ -56,6 +56,12 @@ export interface ConsoleRegisterDeviceInput {
   productId: string;
 }
 
+/** Minimal description of an agent the console may create for a device. */
+export interface ConsoleCreateAgentInput {
+  description?: string;
+  name: string;
+}
+
 export interface ConsoleHardwareService {
   bindDeviceAgent(
     device: ConsoleHardwareDevice,
@@ -69,6 +75,15 @@ export interface ConsoleHardwareService {
   /** Renames a device the signed-in user owns. */
   renameDevice(device: ConsoleHardwareDevice, displayName: string): Promise<ConsoleHardwareDevice | null>;
   retrieveDevice(deviceId: string): Promise<ConsoleHardwareDevice | null>;
+  /**
+   * Optional agent creation seam.
+   *
+   * The console never builds an agent payload itself: a host that can create
+   * agents (for example the Cloud Router console, through the Agents console
+   * service) injects this operation. Absent means "bind existing only", and the
+   * UI hides the inline creation control.
+   */
+  createAgent?(input: ConsoleCreateAgentInput): Promise<ConsoleHardwareAgent | null>;
 }
 
 function pageInput(input: ConsoleHardwareListInput | undefined): { page: number; pageSize: number } {
@@ -95,6 +110,8 @@ export interface CreateConsoleHardwareServiceOptions {
   resolveClient: () => SdkworkAiotAppClient;
   /** Agent catalog seam: the console shows the user's agents. */
   resolveAgents?: () => Promise<ConsoleHardwarePage<ConsoleHardwareAgent>>;
+  /** Optional inline agent creation (owned by the host's agent capability). */
+  createAgent?: (input: ConsoleCreateAgentInput) => Promise<ConsoleHardwareAgent | null>;
 }
 
 export function createConsoleHardwareService(
@@ -165,5 +182,9 @@ export function createConsoleHardwareService(
       }
       return { hasMore: false, items: [], page: 1, pageSize: pageInput(input).pageSize };
     },
+
+    // The inline creation control only appears when the host actually provides it;
+    // the port stays optional so an agent-less host never advertises the action.
+    ...(options.createAgent ? { createAgent: options.createAgent } : {}),
   };
 }

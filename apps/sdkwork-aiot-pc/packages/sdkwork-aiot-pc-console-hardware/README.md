@@ -61,7 +61,9 @@ import { SdkworkHardwareDevicesPage, SdkworkHardwareFirmwarePage } from '@sdkwor
 ```
 
 - **页面分离而非同页切换**：设备页不请求固件目录，固件页不请求设备/智能体目录；共享的只有页框（标题、操作位、跨页导航、错误/提示/加载）——由 `HardwarePageShell` 提供。
-- **组合契约**：`canManage`（是否有 `iot.devices.write`，决定注册/改名/绑定入口）、`copy`（宿主语言包）、`onNavigate`（宿主负责真实路由跳转）、`className`（宿主 gutter/高度）、`service`（宿主注入的端口实现）。
+- **导航归宿主**：`onNavigate` 是可选的；宿主已有侧边栏分组时不再传它，页内就不会出现与侧边栏重复的「我的硬件 / 固件下载」切换条。Cloud Router 用户控制台即按此方式挂载。
+- **组合契约**：`canManage`（是否有 `iot.devices.write`，决定注册/改名/绑定入口）、`copy`（宿主语言包）、`onNavigate`（宿主负责真实路由跳转，可选）、`className`（宿主 gutter/高度）、`service`（宿主注入的端口实现）。
+- **在线状态与时间**：`iot_device.status` 是生命周期字段（`active` 等），不代表连通性；控制台按 `last_seen_at` 的 5 分钟新鲜度推导「在线」，把存储层对从未连接设备返回的占位值 `2026-01-01T00:00:00Z` 识别为「从未连接」，并用本地时区显示时间（一周内显示相对时间）。
 - **依赖倒置**：`. ` 入口不引用 AIoT PC 运行时；默认服务绑定在 `./service-default`，由 `useConsoleHardwareService` 按需 `import()`。宿主注入自己的 `ConsoleHardwareService` 时不会把 AIoT 应用运行时打进宿主包。
 - **深色主题**：两个页面所有表面（卡片/面板/表格/输入/按钮/徽章/抽屉/遮罩）都带 `dark:` 变体，随 Console Shell 的 `dark` 类切换；浅色主题保持原观感。
 - **AIoT 应用内**：`apps/sdkwork-aiot-pc/src/App.tsx` 挂载 `/hardware/devices`（我的硬件）与 `/hardware/firmware`（固件下载）两个导航项，各自渲染对应页面。
@@ -69,6 +71,14 @@ import { SdkworkHardwareDevicesPage, SdkworkHardwareFirmwarePage } from '@sdkwor
 ## 4. 宿主组合（Cloud Router 用户控制台）
 
 `@sdkwork/cloudrouter-pc-console-hardware` 只保留：侧边栏分组与路由（记忆下方）、Cloud Router 会话客户端适配、以及把 i18n 文案映射成 `HardwareConsoleCopy` 的视图。设备领域只有一份实现。
+
+### 4.1 设备 ↔ 智能体
+
+注册设备（抽屉）和设备详情面板都支持三种关联方式：**不关联 / 关联已有 / 新建智能体**。绑定仍写设备 `metadata` 的 `agentId` / `agentName`，不新增表。
+
+- 新建智能体是**可选端口** `ConsoleHardwareService.createAgent?`：本包不构造任何智能体载荷，宿主注入才出现「新建智能体」入口；没有该能力的宿主（AIoT 应用自身）只提供「关联已有」。
+- Cloud Router 适配层用 Agents 控制台的 `createSdkworkAgentService`（按需 `import()`，不触碰 Agents 控制台的全局单例）创建私有智能体，载荷默认值来自 Agents 控制台的 `DEFAULT_AGENT_CONFIG`，再经 `mapAgent` 归一化返回。
+- 注册流程顺序为「创建设备 → 创建/解析智能体 → 写入绑定」：设备创建成功而智能体步骤失败时，控制台以**部分成功**告警保留已注册设备并定位到该设备，不再丢弃注册结果；设备创建前的失败仍留在抽屉内。
 
 ## 5. 验证
 
