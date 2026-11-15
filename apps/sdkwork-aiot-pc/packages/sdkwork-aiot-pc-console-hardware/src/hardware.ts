@@ -142,6 +142,10 @@ export function parseTimestamp(value: string): Date | null {
   if (!trimmed) {
     return null;
   }
+  if (/^\d{4}-\d{2}-\d{2}$/u.test(trimmed)) {
+    const parsedDate = new Date(`${trimmed}T00:00:00Z`);
+    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+  }
   const withSeparator = trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T');
   const candidate = ISO_OFFSET_SUFFIX.test(withSeparator) ? withSeparator : `${withSeparator}Z`;
   const parsed = new Date(candidate);

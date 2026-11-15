@@ -116,9 +116,13 @@ export function SdkworkHardwareDevicesPage({
       const [devicePageResult, agentPage, productPage] = await Promise.all([
         resolvedService.listDevices({ page: 1, pageSize: DEVICE_PAGE_SIZE }),
         resolvedService.listAgents({ page: 1, pageSize: 100 }).catch(() => null),
-        // The registration catalog is optional for this page: it only resolves the
-        // product display names, and a caller without the read grant keeps the ids.
-        resolvedService.listProducts({ page: 1, pageSize: 100 }).catch(() => null),
+        // The registration catalog is optional for this page: it resolves the
+        // product display names and warms the drawer. Read-only visitors never
+        // open the drawer, so they do not spend a catalog request (and a
+        // possible permission denial) just to render the list.
+        canManage
+          ? resolvedService.listProducts({ page: 1, pageSize: 100 }).catch(() => null)
+          : Promise.resolve(null),
       ]);
       setDevices(devicePageResult.items);
       setAgents(agentPage?.items ?? []);
@@ -139,7 +143,7 @@ export function SdkworkHardwareDevicesPage({
     } finally {
       setLoading(false);
     }
-  }, [resolvedService]);
+  }, [canManage, resolvedService]);
 
   useEffect(() => {
     if (resolvedService) {
