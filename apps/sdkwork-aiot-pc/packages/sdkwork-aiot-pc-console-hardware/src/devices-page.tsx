@@ -222,6 +222,7 @@ export function SdkworkHardwareDevicesPage({
     }
     setFormError(null);
     setWarning(null);
+    setNotice(null);
     setRegisterAgentDraft(EMPTY_REGISTER_AGENT_DRAFT);
     setDrawerOpen(true);
     if (products.length > 0) {
@@ -325,6 +326,7 @@ export function SdkworkHardwareDevicesPage({
       setForm(EMPTY_FORM);
       setRegisterAgentDraft(EMPTY_REGISTER_AGENT_DRAFT);
       await load();
+      setNotice(copy.registered);
       if (created) {
         setSelectedDeviceId(created.deviceId);
       }
