@@ -50,16 +50,19 @@ export interface HardwareConsoleCopy {
   healthOffline: string;
   healthWarning: string;
   identityTitle: string;
+  justNow: string;
   lastSeen: string;
   loading: string;
   loadMore: string;
   managedOnly: string;
+  neverConnected: string;
   noMatches: string;
   noProducts: string;
   openDevice: string;
   productColumn: string;
   productHint: string;
   productLabel: string;
+  productsLoading: string;
   readOnlyHint: string;
   refresh: string;
   register: string;
@@ -78,6 +81,9 @@ export interface HardwareConsoleCopy {
   statBound: string;
   statOnline: string;
   statTotal: string;
+  statusDeprecated: string;
+  statusDraft: string;
+  statusPublished: string;
   tabDevices: string;
   tabFirmware: string;
   title: string;
@@ -134,16 +140,19 @@ export const HARDWARE_CONSOLE_COPY_EN: HardwareConsoleCopy = {
   healthOffline: 'Offline',
   healthWarning: 'Warning',
   identityTitle: 'Device identity',
+  justNow: 'Just now',
   lastSeen: 'Last seen',
   loading: 'Loading your hardware...',
   loadMore: 'Load more',
   managedOnly: 'Managed delivery',
+  neverConnected: 'Never connected',
   noMatches: 'Nothing matches the current search.',
   noProducts: 'No product is available to register against.',
   openDevice: 'Open device',
   productColumn: 'Product',
   productHint: 'The product defines the capability model and settings schema.',
   productLabel: 'Product',
+  productsLoading: 'Loading products...',
   readOnlyHint: 'Your account can view devices but cannot register them.',
   refresh: 'Refresh',
   register: 'Register device',
@@ -162,6 +171,9 @@ export const HARDWARE_CONSOLE_COPY_EN: HardwareConsoleCopy = {
   statBound: 'Agent bound',
   statOnline: 'Online',
   statTotal: 'My devices',
+  statusDeprecated: 'Deprecated',
+  statusDraft: 'Draft',
+  statusPublished: 'Published',
   tabDevices: 'My hardware',
   tabFirmware: 'Firmware downloads',
   title: 'Smart Hardware',

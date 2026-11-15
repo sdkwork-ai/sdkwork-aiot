@@ -2,14 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   countHealth,
+  DEVICE_AGENT_ID_KEY,
+  DEVICE_AGENT_NAME_KEY,
+  NEVER_CONNECTED_TIMESTAMP,
   firmwareDownloadUrl,
+  formatLastSeen,
+  formatTimestamp,
+  isNeverConnected,
   mapDevice,
   mapFirmware,
   mapPage,
   mapProduct,
+  parseTimestamp,
+  resolveDeviceHealth,
   withAgentBinding,
-  DEVICE_AGENT_ID_KEY,
-  DEVICE_AGENT_NAME_KEY,
 } from '../src/hardware.ts';
 import { createConsoleHardwareService } from '../src/hardware-service.ts';
 
@@ -87,10 +93,18 @@ describe('smart hardware mappers', () => {
     const device = mapDevice({
       deviceId: 'dev-1',
       displayName: 'Lobby',
+      lastSeenAt: new Date().toISOString(),
       status: 'online',
       metadata: { [DEVICE_AGENT_ID_KEY]: 'agent-1', [DEVICE_AGENT_NAME_KEY]: 'Concierge' },
     });
     expect(device).toMatchObject({ agentId: 'agent-1', agentName: 'Concierge', health: 'healthy' });
+  });
+
+  it('maps a device without a real contact sample as offline', () => {
+    expect(mapDevice({ deviceId: 'never-seen', status: 'active' })?.health).toBe('offline');
+    expect(mapDevice({ deviceId: 'placeholder', lastSeenAt: NEVER_CONNECTED_TIMESTAMP, status: 'active' })?.health).toBe(
+      'offline',
+    );
   });
 
   it('drops rows without an identifier and keeps page info', () => {
@@ -131,6 +145,40 @@ describe('smart hardware mappers', () => {
       { agentId: '', agentName: '', chipFamily: '', clientId: '', deviceId: 'b', displayName: 'b', health: 'warning', lastSeenAt: '', metadata: {}, productId: '', status: 'degraded' },
     ]);
     expect(counts).toEqual({ critical: 0, healthy: 1, offline: 0, warning: 1 });
+  });
+});
+
+describe('smart hardware timestamps and health', () => {
+  it('reads a zone-less wire timestamp as UTC', () => {
+    expect(parseTimestamp('2026-11-15T16:00:00')?.toISOString()).toBe('2026-11-15T16:00:00.000Z');
+    expect(parseTimestamp('2026-11-15T16:00:00Z')?.toISOString()).toBe('2026-11-15T16:00:00.000Z');
+    expect(parseTimestamp('not a date')).toBeNull();
+  });
+
+  it('treats the storage never-seen placeholder as no contact sample', () => {
+    expect(isNeverConnected('')).toBe(true);
+    expect(isNeverConnected(NEVER_CONNECTED_TIMESTAMP)).toBe(true);
+    expect(formatTimestamp(NEVER_CONNECTED_TIMESTAMP)).toBe('');
+    expect(formatLastSeen(NEVER_CONNECTED_TIMESTAMP)).toBe('');
+  });
+
+  it('renders a fresh contact as just now and an older one relatively', () => {
+    const now = Date.UTC(2026, 10, 15, 16, 10, 0);
+    expect(formatLastSeen(new Date(now - 30_000).toISOString(), { justNow: 'just now', now })).toBe('just now');
+    const fiveMinutes = formatLastSeen(new Date(now - 5 * 60_000).toISOString(), { locale: 'en', now });
+    expect(fiveMinutes).toContain('5');
+    expect(fiveMinutes).toContain('minute');
+  });
+
+  it('derives online health from contact freshness instead of the lifecycle status', () => {
+    const now = Date.UTC(2026, 10, 15, 16, 10, 0);
+    const fresh = new Date(now - 60_000).toISOString();
+    const stale = new Date(now - 60 * 60_000).toISOString();
+    expect(resolveDeviceHealth('active', fresh, now)).toBe('healthy');
+    expect(resolveDeviceHealth('active', stale, now)).toBe('offline');
+    expect(resolveDeviceHealth('online', NEVER_CONNECTED_TIMESTAMP, now)).toBe('offline');
+    expect(resolveDeviceHealth('critical', fresh, now)).toBe('critical');
+    expect(resolveDeviceHealth('degraded', fresh, now)).toBe('warning');
   });
 });
 

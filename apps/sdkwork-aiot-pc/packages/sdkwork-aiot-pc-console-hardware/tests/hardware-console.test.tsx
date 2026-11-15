@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SdkworkHardwareDevicesPage } from '../src/devices-page.tsx';
@@ -94,8 +94,7 @@ describe('SdkworkHardwareDevicesPage', () => {
     expect(darkClasses).toContain('dark:text-zinc-100');
   });
 
-  it('loads the next device page and de-duplicates the appended rows', async () => {
-    const service = stubService();
+  it('loads the next device page and de-duplicates the appended rows', async () => {    const service = stubService();
     const firstPage = await service.listDevices({ page: 1 });
     const firstDevice = firstPage.items[0]!;
     let call = 0;
@@ -119,6 +118,70 @@ describe('SdkworkHardwareDevicesPage', () => {
     await waitFor(() => expect(screen.getAllByText('Hall lock').length).toBeGreaterThan(0));
     expect(call).toBeGreaterThan(1);
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+  });
+
+  it('blocks registration while no product is available', async () => {
+    const service = stubService();
+    service.listProducts = vi.fn(async () => ({ hasMore: false, items: [], page: 1, pageSize: 20 }));
+    render(<SdkworkHardwareDevicesPage canManage service={service} />);
+    await waitFor(() => expect(screen.getAllByText('Lobby lock').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: 'Register device' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(await screen.findByText('No product is available to register against.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(service.registerDevice).not.toHaveBeenCalled();
+  });
+
+  it('keeps the form open and shows the reason when registration fails', async () => {
+    const service = stubService();
+    service.listProducts = vi.fn(async () => ({
+      hasMore: false,
+      items: [{ displayName: 'Xiaozhi Voice Assistant', productId: '9001', status: 'active' }],
+      page: 1,
+      pageSize: 20,
+    }));
+    service.registerDevice = vi.fn(async () => {
+      throw Object.assign(new Error('device already exists'), { status: 409 });
+    });
+    render(<SdkworkHardwareDevicesPage canManage service={service} />);
+    await waitFor(() => expect(screen.getAllByText('Lobby lock').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: 'Register device' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Device ID/u), { target: { value: 'dev-9' } });
+    fireEvent.change(screen.getByLabelText(/Display name/u), { target: { value: 'Hall sensor' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('The request could not be completed.');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(service.registerDevice).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a never-seen device as never connected instead of a fake date', async () => {
+    const service = stubService();
+    service.listDevices = vi.fn(async () => ({
+      hasMore: false,
+      items: [
+        {
+          agentId: '',
+          agentName: '',
+          chipFamily: 'esp32',
+          clientId: '',
+          deviceId: 'dev-x',
+          displayName: 'Fresh lock',
+          health: 'offline' as const,
+          lastSeenAt: '2026-01-01T00:00:00Z',
+          metadata: {},
+          productId: '1008',
+          status: 'active',
+        },
+      ],
+      page: 1,
+      pageSize: 20,
+    }));
+    render(<SdkworkHardwareDevicesPage canManage={false} service={service} />);
+    await waitFor(() => expect(screen.getAllByText('Fresh lock').length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/Never connected/u).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/2026-01-01/u)).not.toBeInTheDocument();
   });
 });
 

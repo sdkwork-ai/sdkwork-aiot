@@ -14,7 +14,7 @@ import {
 } from './hardware-console-chrome.tsx';
 import {
   countHealth,
-  formatTimestamp,
+  formatLastSeen,
   matchesQuery,
   type ConsoleHardwareAgent,
   type ConsoleHardwareDevice,
@@ -22,6 +22,7 @@ import {
 } from './hardware.ts';
 import {
   describeConsoleHardwareError,
+  type ConsoleHardwareError,
   type ConsoleHardwareService,
 } from './hardware-service.ts';
 import { useConsoleHardwareService, useEscapeToClose } from './use-console-hardware-service.ts';
@@ -40,6 +41,20 @@ export interface SdkworkHardwareDevicesPageProps {
 }
 
 const DEVICE_PAGE_SIZE = 20;
+
+/**
+ * Builds the inline form failure text. Field-level validation details returned by
+ * the service are actionable, so they are appended; internals of a 5xx or a
+ * transport failure stay out of the UI.
+ */
+function describeFailure(copy: HardwareConsoleCopy, description: ConsoleHardwareError): string {
+  const base = copy.errors[description.key] || copy.errors.unavailable;
+  if (description.status === 400 || description.status === 409 || description.status === 422) {
+    const detail = description.detail.trim();
+    return detail && detail !== base ? `${base} ${detail}` : base;
+  }
+  return base;
+}
 
 type RegisterForm = {
   chipFamily: string;
@@ -71,6 +86,8 @@ export function SdkworkHardwareDevicesPage({
   const [devices, setDevices] = useState<ConsoleHardwareDevice[]>([]);
   const [agents, setAgents] = useState<ConsoleHardwareAgent[]>([]);
   const [products, setProducts] = useState<ConsoleHardwareProduct[]>([]);
+  const [productNames, setProductNames] = useState<Record<string, string>>({});
+  const [productsLoading, setProductsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -96,12 +113,21 @@ export function SdkworkHardwareDevicesPage({
     setLoading(true);
     setError(null);
     try {
-      const [devicePageResult, agentPage] = await Promise.all([
+      const [devicePageResult, agentPage, productPage] = await Promise.all([
         resolvedService.listDevices({ page: 1, pageSize: DEVICE_PAGE_SIZE }),
         resolvedService.listAgents({ page: 1, pageSize: 100 }).catch(() => null),
+        // The registration catalog is optional for this page: it only resolves the
+        // product display names, and a caller without the read grant keeps the ids.
+        resolvedService.listProducts({ page: 1, pageSize: 100 }).catch(() => null),
       ]);
       setDevices(devicePageResult.items);
       setAgents(agentPage?.items ?? []);
+      if (productPage) {
+        setProducts(productPage.items);
+        setProductNames(
+          Object.fromEntries(productPage.items.map((product) => [product.productId, product.displayName])),
+        );
+      }
       setDevicePage(devicePageResult.page);
       setDeviceTotal(devicePageResult.total ?? devicePageResult.items.length);
       setDeviceHasMore(devicePageResult.hasMore);
@@ -143,7 +169,13 @@ export function SdkworkHardwareDevicesPage({
     }
   }, [deviceHasMore, devicePage, deviceTotal, loadingMore, resolvedService]);
 
-  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+  const closeDrawer = useCallback(() => {
+    // The overlay stays open while the registration request is in flight so a
+    // half-submitted form cannot be dismissed by Escape or a stray backdrop click.
+    if (!busy) {
+      setDrawerOpen(false);
+    }
+  }, [busy]);
   useEscapeToClose(drawerOpen, closeDrawer);
 
   const selectedDevice = useMemo(
@@ -180,15 +212,24 @@ export function SdkworkHardwareDevicesPage({
       setForm((current) => ({ ...current, productId: current.productId || products[0]?.productId || '' }));
       return;
     }
+    setProductsLoading(true);
     try {
       const page = await resolvedService.listProducts({ page: 1, pageSize: 100 });
       setProducts(page.items);
+      setProductNames((current) => ({
+        ...current,
+        ...Object.fromEntries(page.items.map((product) => [product.productId, product.displayName])),
+      }));
       setForm((current) => ({ ...current, productId: current.productId || page.items[0]?.productId || '' }));
     } catch (cause) {
+      // Keep the drawer open: the operator is in the middle of a form, and the
+      // catalog failure (permission, transport) has to be actionable in place.
       const description = describeConsoleHardwareError(cause);
-      setError({ detail: description.detail, key: description.key });
+      setFormError(describeFailure(copy, description));
+    } finally {
+      setProductsLoading(false);
     }
-  }, [products, resolvedService]);
+  }, [copy, products, resolvedService]);
 
   const submitRegister = useCallback(async () => {
     if (!resolvedService) {
@@ -199,7 +240,7 @@ export function SdkworkHardwareDevicesPage({
       return;
     }
     setBusy(true);
-    setError(null);
+    setFormError(null);
     try {
       const created = await resolvedService.registerDevice({
         deviceId: form.deviceId.trim(),
@@ -215,13 +256,14 @@ export function SdkworkHardwareDevicesPage({
         setSelectedDeviceId(created.deviceId);
       }
     } catch (cause) {
+      // Preserve the operator's input: a failed registration is a form-level
+      // error, not a reason to throw the drawer away.
       const description = describeConsoleHardwareError(cause);
-      setError({ detail: description.detail, key: description.key });
-      setDrawerOpen(false);
+      setFormError(describeFailure(copy, description));
     } finally {
       setBusy(false);
     }
-  }, [copy.required, form, load, resolvedService]);
+  }, [copy, form, load, resolvedService]);
 
   const renameDevice = useCallback(async () => {
     if (!resolvedService || !selectedDevice) {
@@ -306,6 +348,7 @@ export function SdkworkHardwareDevicesPage({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={copy.searchDevices}
+            aria-label={copy.searchDevices}
             className="w-full max-w-sm rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 shadow-sm outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
           />
 
@@ -341,7 +384,9 @@ export function SdkworkHardwareDevicesPage({
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{device.displayName}</h3>
+                        <span className="block truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                          {device.displayName}
+                        </span>
                         <p className="mt-0.5 truncate font-mono text-[11px] text-zinc-500 dark:text-zinc-400">{device.deviceId}</p>
                       </div>
                       <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${HEALTH_TONE[device.health]}`}>
@@ -356,10 +401,14 @@ export function SdkworkHardwareDevicesPage({
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500 dark:text-zinc-400">
                       <span>
+                        {copy.productColumn}: {productNames[device.productId] || device.productId || '-'}
+                      </span>
+                      <span>
                         {copy.chipLabel}: {device.chipFamily || '-'}
                       </span>
                       <span>
-                        {copy.lastSeen}: {formatTimestamp(device.lastSeenAt) || '-'}
+                        {copy.lastSeen}:{' '}
+                        {formatLastSeen(device.lastSeenAt, { justNow: copy.justNow }) || copy.neverConnected}
                       </span>
                     </div>
                     <div className="border-t border-zinc-100 dark:border-zinc-800/70 pt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
@@ -401,7 +450,9 @@ export function SdkworkHardwareDevicesPage({
                     <dl className="grid grid-cols-2 gap-3 text-xs">
                       <div>
                         <dt className="text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{copy.productColumn}</dt>
-                        <dd className="mt-0.5 font-mono text-zinc-800 dark:text-zinc-200">{selectedDevice.productId || '-'}</dd>
+                        <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">
+                          {productNames[selectedDevice.productId] || selectedDevice.productId || '-'}
+                        </dd>
                       </div>
                       <div>
                         <dt className="text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{copy.chipLabel}</dt>
@@ -409,7 +460,9 @@ export function SdkworkHardwareDevicesPage({
                       </div>
                       <div>
                         <dt className="text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{copy.lastSeen}</dt>
-                        <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">{formatTimestamp(selectedDevice.lastSeenAt) || '-'}</dd>
+                        <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">
+                          {formatLastSeen(selectedDevice.lastSeenAt, { justNow: copy.justNow }) || copy.neverConnected}
+                        </dd>
                       </div>
                     </dl>
                     <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-3">
@@ -471,6 +524,7 @@ export function SdkworkHardwareDevicesPage({
         onSubmit={() => void submitRegister()}
         open={drawerOpen}
         products={products}
+        productsLoading={productsLoading}
       />
     </>
   );

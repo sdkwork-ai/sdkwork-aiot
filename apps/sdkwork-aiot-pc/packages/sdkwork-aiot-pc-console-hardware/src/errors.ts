@@ -43,9 +43,23 @@ function readStatus(error: unknown): number | undefined {
   return undefined;
 }
 
+function readDetail(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return '';
+  }
+  const record = error as Record<string, unknown>;
+  const problem = readProblem(error);
+  for (const candidate of [problem.detail, problem.title, record.detail]) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return error instanceof Error ? error.message.trim() : '';
+}
+
 export function describeConsoleHardwareError(error: unknown): ConsoleHardwareError {
   const status = readStatus(error);
-  const detail = error instanceof Error ? error.message.trim() : '';
+  const detail = readDetail(error);
   if (status === 401) {
     return { detail, key: 'unauthorized', status };
   }
@@ -55,11 +69,13 @@ export function describeConsoleHardwareError(error: unknown): ConsoleHardwareErr
   if (status === 404) {
     return { detail, key: 'notFound', status };
   }
-  if (status === 400 || status === 409 || status === 422) {
-    return { detail, key: status === 409 ? 'conflict' : 'validation', status };
+  if (status === 409) {
+    return { detail, key: 'conflict', status };
   }
-  if (status !== undefined && status >= 500) {
-    return { detail, key: 'unavailable', status };
+  if (status === 400 || status === 422) {
+    return { detail, key: 'validation', status };
   }
-  return { detail, key: 'conflict', ...(status === undefined ? {} : { status }) };
+  // Rate limits, upstream 5xx, and transport failures (no HTTP status) are all
+  // "try again shortly" from the operator's point of view.
+  return { detail, key: 'unavailable', ...(status === undefined ? {} : { status }) };
 }

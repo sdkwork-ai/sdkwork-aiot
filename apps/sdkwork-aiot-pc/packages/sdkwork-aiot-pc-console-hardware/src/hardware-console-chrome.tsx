@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 
 import type { ConsoleHardwareDevice, ConsoleHardwareProduct } from './hardware.ts';
 import type { HardwareConsoleCopy } from './copy.ts';
@@ -197,14 +197,19 @@ export interface RegisterDrawerProps {
   onSubmit: () => void;
   open: boolean;
   products: readonly ConsoleHardwareProduct[];
+  /** True while the product catalog is being fetched for the select. */
+  productsLoading?: boolean;
 }
 
 const REGISTER_FIELDS = [
-  { key: 'deviceId', required: true },
-  { key: 'displayName', required: true },
-  { key: 'clientId', required: false },
-  { key: 'chipFamily', required: false },
+  { key: 'deviceId', maxLength: 128, required: true },
+  { key: 'displayName', maxLength: 120, required: true },
+  { key: 'clientId', maxLength: 128, required: false },
+  { key: 'chipFamily', maxLength: 64, required: false },
 ] as const;
+
+/** Element ids the drawer wires to its accessible description and error slot. */
+const REGISTER_DESCRIPTION_ID = 'sdkwork-hardware-register-description';
 
 /**
  * Device registration drawer.
@@ -222,10 +227,31 @@ export function RegisterDrawer({
   onSubmit,
   open,
   products,
+  productsLoading = false,
 }: RegisterDrawerProps) {
+  const firstFieldRef = useRef<HTMLInputElement | null>(null);
+
+  // Move focus into the drawer when it opens and give it back to the trigger
+  // when it closes, so keyboard and screen-reader users are not stranded.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    firstFieldRef.current?.focus();
+    return () => {
+      previouslyFocused?.focus?.();
+    };
+  }, [open]);
+
   if (!open) {
     return null;
   }
+
+  const noProduct = products.length === 0;
+  const submitDisabled = busy || noProduct;
+  const productSelectDisabled = busy || productsLoading || noProduct;
 
   const fieldMeta = {
     chipFamily: { hint: undefined, label: copy.chipLabel },
@@ -234,37 +260,74 @@ export function RegisterDrawer({
     displayName: { hint: undefined, label: copy.displayNameLabel },
   } as const;
 
+  const trapFocus = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab') {
+      return;
+    }
+    const focusable = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]',
+      ),
+    );
+    if (focusable.length === 0) {
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-zinc-950/40 dark:bg-black/60 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-zinc-950/40 dark:bg-black/60 backdrop-blur-sm"
+      onClick={busy ? undefined : onClose}
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={copy.registerTitle}
+        aria-describedby={REGISTER_DESCRIPTION_ID}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={trapFocus}
         className="flex h-full w-full max-w-lg flex-col border-l border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl"
       >
         <header className="flex items-start justify-between gap-3 border-b border-zinc-100 dark:border-zinc-800/70 px-5 py-4">
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{copy.registerTitle}</h2>
-            <p className="mt-0.5 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{copy.registerDescription}</p>
+            <p id={REGISTER_DESCRIPTION_ID} className="mt-0.5 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+              {copy.registerDescription}
+            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-2 py-1 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            disabled={busy}
+            className="rounded-md px-2 py-1 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {copy.close}
           </button>
         </header>
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
-          {REGISTER_FIELDS.map((field) => (
+          {REGISTER_FIELDS.map((field, index) => (
             <label key={field.key} className="flex flex-col gap-1 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
               <span>
                 {fieldMeta[field.key].label}
                 {field.required ? <span className="ml-1 text-rose-500">*</span> : null}
               </span>
               <input
+                ref={index === 0 ? firstFieldRef : undefined}
                 value={form[field.key]}
                 disabled={busy}
+                maxLength={field.maxLength}
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck={false}
                 onChange={(event) => onChange({ [field.key]: event.target.value })}
                 className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm font-normal text-zinc-800 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
               />
@@ -282,11 +345,11 @@ export function RegisterDrawer({
             </span>
             <select
               value={form.productId}
-              disabled={busy || products.length === 0}
+              disabled={productSelectDisabled}
               onChange={(event) => onChange({ productId: event.target.value })}
-              className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm font-normal text-zinc-800 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+              className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm font-normal text-zinc-800 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-600 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              <option value="">{copy.selectPlaceholder}</option>
+              <option value="">{productsLoading ? copy.productsLoading : copy.selectPlaceholder}</option>
               {products.map((product) => (
                 <option key={product.productId} value={product.productId}>
                   {product.displayName} · {product.productId}
@@ -295,18 +358,22 @@ export function RegisterDrawer({
             </select>
             <span className="text-[11px] font-normal text-zinc-500 dark:text-zinc-400">{copy.productHint}</span>
           </label>
-          {products.length === 0 ? (
+          {noProduct && !productsLoading ? (
             <p className="rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
               {copy.noProducts}
             </p>
           ) : null}
-          {formError ? <p className="text-xs font-medium text-rose-600 dark:text-rose-400">{formError}</p> : null}
+          {formError ? (
+            <p role="alert" aria-live="assertive" className="text-xs font-medium text-rose-600 dark:text-rose-400">
+              {formError}
+            </p>
+          ) : null}
         </div>
         <footer className="flex items-center justify-end gap-2 border-t border-zinc-100 dark:border-zinc-800/70 px-5 py-3">
           <SecondaryButton onClick={onClose} disabled={busy}>
             {copy.cancel}
           </SecondaryButton>
-          <PrimaryButton onClick={onSubmit} disabled={busy}>
+          <PrimaryButton onClick={onSubmit} disabled={submitDisabled}>
             {busy ? copy.saving : copy.confirm}
           </PrimaryButton>
         </footer>
