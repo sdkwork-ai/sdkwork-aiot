@@ -1,5 +1,3 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use sdkwork_aiot_storage::{AiotOffsetListResult, AiotStorageAssociation, OffsetListPageParams};
 use sqlx::Row;
 
@@ -441,10 +439,37 @@ fn row_to_entity_record_postgres(
     })
 }
 
+/// ISO-8601 UTC timestamp for the `iot_admin_entity` lifecycle columns.
+///
+/// `created_at` / `updated_at` are `timestamp without time zone` on Postgres.
+/// An epoch-second string is only valid for SQLite's text affinity; Postgres
+/// rejects it with `date/time field value out of range`, which rolled back
+/// every catalog entity write and left the product catalog permanently empty.
 fn current_timestamp() -> String {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|value| value.as_secs())
-        .unwrap_or(0);
-    format!("{seconds}")
+    chrono::Utc::now()
+        .format("%Y-%m-%dT%H:%M:%SZ")
+        .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timestamp_literal_is_postgres_parseable() {
+        let timestamp = current_timestamp();
+        assert_eq!(
+            timestamp.len(),
+            20,
+            "timestamp must be YYYY-MM-DDTHH:MM:SSZ, got {timestamp}"
+        );
+        assert!(timestamp.ends_with('Z'), "timestamp must be UTC: {timestamp}");
+        assert_eq!(&timestamp[4..5], "-");
+        assert_eq!(&timestamp[7..8], "-");
+        assert_eq!(&timestamp[10..11], "T");
+        assert!(
+            timestamp[..4].parse::<u16>().is_ok_and(|year| year >= 2024),
+            "timestamp must start with a four-digit year: {timestamp}"
+        );
+    }
 }
