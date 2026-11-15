@@ -1,6 +1,6 @@
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 
-import type { ConsoleHardwareDevice, ConsoleHardwareProduct } from './hardware.ts';
+import type { ConsoleHardwareAgent, ConsoleHardwareDevice, ConsoleHardwareProduct } from './hardware.ts';
 import type { HardwareConsoleCopy } from './copy.ts';
 
 /**
@@ -94,6 +94,8 @@ export interface HardwarePageShellProps {
   onRegister?: () => void;
   screen: ConsoleHardwareScreen;
   title: string;
+  /** Non-blocking advisory (for example a partial registration success). */
+  warning?: string | null;
 }
 
 export function HardwarePageShell({
@@ -109,6 +111,7 @@ export function HardwarePageShell({
   onRegister,
   screen,
   title,
+  warning,
 }: HardwarePageShellProps) {
   const errorText = error ? copy.errors[error.key] : '';
   const tabs: ReadonlyArray<readonly [ConsoleHardwareScreen, string]> = [
@@ -175,6 +178,12 @@ export function HardwarePageShell({
           </div>
         ) : null}
 
+        {warning ? (
+          <div role="status" className="rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 px-4 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">
+            {warning}
+          </div>
+        ) : null}
+
         {loading ? (
           <div role="status" className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">
             {copy.loading}
@@ -187,12 +196,30 @@ export function HardwarePageShell({
   );
 }
 
+/** How the registration form treats the device-to-agent binding. */
+export type RegisterAgentMode = 'none' | 'existing' | 'new';
+
+export interface RegisterAgentDraft {
+  /** Existing agent id; used when `mode` is `existing`. */
+  agentId: string;
+  /** Agent name draft; used when `mode` is `new`. */
+  agentName: string;
+  mode: RegisterAgentMode;
+}
+
+export const EMPTY_REGISTER_AGENT_DRAFT: RegisterAgentDraft = { agentId: '', agentName: '', mode: 'none' };
+
 export interface RegisterDrawerProps {
+  agentDraft: RegisterAgentDraft;
+  agents: readonly ConsoleHardwareAgent[];
   busy: boolean;
+  /** Hosts without the agent-creation seam hide the inline creation mode. */
+  canCreateAgent: boolean;
   copy: HardwareConsoleCopy;
   form: { chipFamily: string; clientId: string; deviceId: string; displayName: string; productId: string };
   formError: string | null;
   onChange: (patch: Partial<RegisterDrawerProps['form']>) => void;
+  onAgentDraftChange: (patch: Partial<RegisterAgentDraft>) => void;
   onClose: () => void;
   onSubmit: () => void;
   open: boolean;
@@ -218,10 +245,14 @@ const REGISTER_DESCRIPTION_ID = 'sdkwork-hardware-register-description';
  * the firmware page never mounts registration UI at all.
  */
 export function RegisterDrawer({
+  agentDraft,
+  agents,
   busy,
+  canCreateAgent,
   copy,
   form,
   formError,
+  onAgentDraftChange,
   onChange,
   onClose,
   onSubmit,
@@ -252,6 +283,16 @@ export function RegisterDrawer({
   const noProduct = products.length === 0;
   const submitDisabled = busy || noProduct;
   const productSelectDisabled = busy || productsLoading || noProduct;
+  const agentModes: ReadonlyArray<readonly [RegisterAgentMode, string]> = canCreateAgent
+    ? [
+        ['none', copy.agentModeNone],
+        ['existing', copy.agentModeExisting],
+        ['new', copy.agentModeNew],
+      ]
+    : [
+        ['none', copy.agentModeNone],
+        ['existing', copy.agentModeExisting],
+      ];
 
   const fieldMeta = {
     chipFamily: { hint: undefined, label: copy.chipLabel },
@@ -363,6 +404,64 @@ export function RegisterDrawer({
               {copy.noProducts}
             </p>
           ) : null}
+          <fieldset className="flex flex-col gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 px-3 py-3">
+            <legend className="px-1 text-xs font-semibold text-zinc-700 dark:text-zinc-300">{copy.agentTitle}</legend>
+            <p className="text-[11px] leading-5 text-zinc-500 dark:text-zinc-400">{copy.agentDescription}</p>
+            <div role="group" aria-label={copy.agentTitle} className="flex flex-wrap items-center gap-1">
+              {agentModes.map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={agentDraft.mode === mode}
+                  onClick={() => onAgentDraftChange({ mode })}
+                  className={
+                    agentDraft.mode === mode
+                      ? 'rounded-lg bg-zinc-900 dark:bg-zinc-100 px-2.5 py-1.5 text-[11px] font-semibold text-white dark:text-zinc-900'
+                      : 'rounded-lg border border-zinc-200 dark:border-zinc-800 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100'
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {agentDraft.mode === 'existing' ? (
+              <>
+                <select
+                  value={agentDraft.agentId}
+                  disabled={busy || agents.length === 0}
+                  aria-label={copy.agentSelect}
+                  onChange={(event) => onAgentDraftChange({ agentId: event.target.value })}
+                  className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm font-normal text-zinc-800 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-600 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <option value="">{copy.selectPlaceholder}</option>
+                  {agents.map((agent) => (
+                    <option key={agent.agentId} value={agent.agentId}>
+                      {agent.name}
+                    </option>
+                  ))}
+                </select>
+                {agents.length === 0 ? (
+                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{copy.agentEmptyCreate}</span>
+                ) : null}
+              </>
+            ) : null}
+            {agentDraft.mode === 'new' ? (
+              <>
+                <input
+                  value={agentDraft.agentName}
+                  disabled={busy}
+                  maxLength={80}
+                  autoComplete="off"
+                  aria-label={copy.agentNameLabel}
+                  placeholder={copy.agentNamePlaceholder}
+                  onChange={(event) => onAgentDraftChange({ agentName: event.target.value })}
+                  className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm font-normal text-zinc-800 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+                />
+                <span className="text-[11px] leading-5 text-zinc-500 dark:text-zinc-400">{copy.agentCreateHint}</span>
+              </>
+            ) : null}
+          </fieldset>
           {formError ? (
             <p role="alert" aria-live="assertive" className="text-xs font-medium text-rose-600 dark:text-rose-400">
               {formError}

@@ -10,10 +10,21 @@ import type { ConsoleHardwareErrorKey } from './hardware-service.ts';
  */
 export interface HardwareConsoleCopy {
   agentBound: string;
+  agentCreateHint: string;
+  agentCreateOption: string;
+  agentDefaultName: string;
   agentDescription: string;
   agentEmpty: string;
+  agentEmptyCreate: string;
+  agentModeExisting: string;
+  agentModeNew: string;
+  agentModeNone: string;
+  agentNameLabel: string;
+  agentNamePlaceholder: string;
   agentNone: string;
+  agentPartialFailure: string;
   agentReadOnly: string;
+  agentRequired: string;
   agentSave: string;
   agentSaved: string;
   agentSelect: string;
@@ -91,11 +102,23 @@ export interface HardwareConsoleCopy {
 
 export const HARDWARE_CONSOLE_COPY_EN: HardwareConsoleCopy = {
   agentBound: 'Operated by {{name}}',
+  agentCreateHint: 'A private agent is created and bound to this device.',
+  agentCreateOption: 'Create a new agent...',
+  agentDefaultName: "{{name}}'s agent",
   agentDescription:
     'The agent that operates this device. Ask it to report state, run a routine, or explain an alert.',
   agentEmpty: 'No agent bound',
+  agentEmptyCreate: 'No agent yet — create one here.',
+  agentModeExisting: 'Bind existing',
+  agentModeNew: 'Create new',
+  agentModeNone: 'Do not bind',
+  agentNameLabel: 'New agent name',
+  agentNamePlaceholder: 'e.g. Living room assistant',
   agentNone: 'No agent',
+  agentPartialFailure:
+    'The device was registered, but its agent could not be created or bound. Open the device to bind one again.',
   agentReadOnly: 'Your account can view the binding but cannot change it.',
+  agentRequired: 'Select an agent, or switch the binding off.',
   agentSave: 'Save binding',
   agentSaved: 'Agent binding saved.',
   agentSelect: 'Agent',

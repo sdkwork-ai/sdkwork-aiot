@@ -20,6 +20,7 @@ export {
   type SdkworkHardwareFirmwarePageProps,
 } from './firmware-page.tsx';
 export {
+  EMPTY_REGISTER_AGENT_DRAFT,
   HEALTH_TONE,
   HardwarePageShell,
   Panel,
@@ -30,6 +31,8 @@ export {
   type ConsoleHardwareScreen,
   type HardwarePageErrorState,
   type HardwarePageShellProps,
+  type RegisterAgentDraft,
+  type RegisterAgentMode,
   type RegisterDrawerProps,
 } from './hardware-console-chrome.tsx';
 export {
@@ -75,6 +78,7 @@ export {
   CONSOLE_HARDWARE_PAGE_SIZE,
   createConsoleHardwareService,
   describeConsoleHardwareError,
+  type ConsoleCreateAgentInput,
   type ConsoleHardwareError,
   type ConsoleHardwareErrorKey,
   type ConsoleHardwareListInput,
