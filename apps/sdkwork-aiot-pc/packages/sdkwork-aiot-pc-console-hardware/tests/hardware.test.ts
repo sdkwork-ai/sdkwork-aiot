@@ -17,7 +17,7 @@ import {
   resolveDeviceHealth,
   withAgentBinding,
 } from '../src/hardware.ts';
-import { createConsoleHardwareService } from '../src/hardware-service.ts';
+import { createConsoleHardwareService, describeConsoleHardwareError } from '../src/hardware-service.ts';
 
 function createStubClient() {
   const listDevices = vi.fn(async () => ({
@@ -203,7 +203,8 @@ describe('smart hardware app-surface service', () => {
     expect(params.idempotencyKey).toMatch(/^iot-console-device-create-/);
   });
 
-  it('persists the agent binding through the device metadata update', async () => {    const stub = createStubClient();
+  it('persists the agent binding through the device metadata update', async () => {
+    const stub = createStubClient();
     const service = createConsoleHardwareService({ resolveClient: () => stub.client as never });
     const next = await service.bindDeviceAgent(
       {
@@ -266,5 +267,45 @@ describe('smart hardware app-surface service', () => {
     const service = createConsoleHardwareService({ resolveClient: () => stub.client as never });
     expect((await service.listProducts()).items[0]?.productId).toBe('1008');
     expect((await service.listFirmware()).items[0]?.artifactId).toBe('art-1');
+  });
+
+  it('exposes agent creation only when the host provides the seam', () => {
+    const stub = createStubClient();
+    const withoutCreator = createConsoleHardwareService({ resolveClient: () => stub.client as never });
+    expect(withoutCreator.createAgent).toBeUndefined();
+
+    const createAgent = async ({ name }: { name: string }) => ({
+      agentId: 'agent-9',
+      description: '',
+      name,
+    });
+    const withCreator = createConsoleHardwareService({
+      resolveClient: () => stub.client as never,
+      createAgent,
+    });
+    expect(withCreator.createAgent).toBe(createAgent);
+  });
+});
+
+describe('console hardware error classification', () => {
+  it('prefers the problem detail and classifies by HTTP status', () => {
+    expect(
+      describeConsoleHardwareError({ problem: { detail: 'Permission denied: iot.profiles.read', status: 403 } }),
+    ).toEqual({ detail: 'Permission denied: iot.profiles.read', key: 'forbidden', status: 403 });
+    expect(describeConsoleHardwareError(Object.assign(new Error('device already exists'), { status: 409 }))).toMatchObject({
+      key: 'conflict',
+      status: 409,
+    });
+    expect(describeConsoleHardwareError(Object.assign(new Error('bad input'), { status: 400 })).key).toBe('validation');
+    expect(describeConsoleHardwareError({ status: 422 }).key).toBe('validation');
+  });
+
+  it('treats transport failures and rate limits as retryable unavailability', () => {
+    expect(describeConsoleHardwareError(new Error('Failed to fetch'))).toMatchObject({
+      key: 'unavailable',
+      detail: 'Failed to fetch',
+    });
+    expect(describeConsoleHardwareError({ status: 429 }).key).toBe('unavailable');
+    expect(describeConsoleHardwareError({ status: 503 }).key).toBe('unavailable');
   });
 });

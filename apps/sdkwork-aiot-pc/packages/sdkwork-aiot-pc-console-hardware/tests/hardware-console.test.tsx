@@ -229,6 +229,7 @@ describe('SdkworkHardwareDevicesPage', () => {
       expect.objectContaining({ deviceId: 'dev-9' }),
       expect.objectContaining({ agentId: 'agent-1' }),
     );
+    expect(await screen.findByText('Device registered.')).toBeInTheDocument();
   });
 
   it('creates and binds a new agent while registering a device', async () => {

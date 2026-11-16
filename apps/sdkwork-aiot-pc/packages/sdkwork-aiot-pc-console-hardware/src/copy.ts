@@ -79,6 +79,7 @@ export interface HardwareConsoleCopy {
   register: string;
   registerDescription: string;
   registerTitle: string;
+  registered: string;
   renameLabel: string;
   renameSave: string;
   renamed: string;
@@ -181,6 +182,7 @@ export const HARDWARE_CONSOLE_COPY_EN: HardwareConsoleCopy = {
   register: 'Register device',
   registerDescription: 'The device identity is the hardware serial or the provisioned id on the device label.',
   registerTitle: 'Register a device',
+  registered: 'Device registered.',
   renameLabel: 'Device name',
   renameSave: 'Rename',
   renamed: 'Device renamed.',
