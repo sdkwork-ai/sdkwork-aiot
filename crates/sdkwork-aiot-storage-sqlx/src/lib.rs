@@ -2,6 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use dialect_sql::{cast_placeholder, SqlCast};
+
 mod blocking_device_pool;
 mod credential;
 mod credential_hash;
@@ -1011,16 +1013,6 @@ impl SqlDialect {
             Self::Sqlite => "?".to_string(),
         }
     }
-
-    fn placeholders(&self, count: usize) -> String {
-        match self {
-            Self::Postgres => (1..=count)
-                .map(|index| self.placeholder(index))
-                .collect::<Vec<_>>()
-                .join(", "),
-            Self::Sqlite => vec!["?"; count].join(", "),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1746,6 +1738,25 @@ fn initial_migration_table_definition(table: &str) -> Option<&'static str> {
     Some(&sql[start..start + marker.len() + end])
 }
 
+/// Renders the `VALUES (...)` operand list for a statement with `count` binds,
+/// applying the cast each listed placeholder's target column requires.
+///
+/// PostgreSQL types a parameter from the Rust value that is bound, so text
+/// instants and text NULLs written to `timestamp`/`bigint` columns must be cast
+/// by the statement itself; without the cast the server rejects the statement at
+/// parse time and the write surfaces as an opaque `50001` in production.
+fn values_clause(dialect: SqlDialect, count: usize, casts: &[(usize, SqlCast)]) -> String {
+    (1..=count)
+        .map(
+            |index| match casts.iter().find(|(target, _)| *target == index) {
+                Some((_, cast)) => cast_placeholder(dialect, index, *cast),
+                None => dialect.placeholder(index),
+            },
+        )
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn device_create_statement(
     dialect: SqlDialect,
     device: &AiotDeviceRecord,
@@ -1774,7 +1785,17 @@ fn device_create_statement(
         dialect,
         format!(
             "INSERT INTO iot_device (id, uuid, tenant_id, organization_id, data_scope, owner_type, owner_id, device_key, product_id, display_name, device_id, client_id, chip_family, lifecycle_state, last_seen_at, metadata, status, created_at, updated_at, version, created_by, updated_by) VALUES ({})",
-            dialect.placeholders(22)
+            values_clause(
+                dialect,
+                22,
+                &[
+                    (15, SqlCast::Timestamp),
+                    (18, SqlCast::Timestamp),
+                    (19, SqlCast::Timestamp),
+                    (21, SqlCast::BigInt),
+                    (22, SqlCast::BigInt),
+                ],
+            )
         ),
         vec![
             SqlBindValue::Int64(id),
@@ -1820,7 +1841,7 @@ fn device_update_statement(
             dialect.placeholder(3),
             dialect.placeholder(4),
             dialect.placeholder(5),
-            dialect.placeholder(6),
+            cast_placeholder(dialect, 6, SqlCast::Timestamp),
             dialect.placeholder(7),
             dialect.placeholder(8),
             dialect.placeholder(9)
@@ -1913,8 +1934,8 @@ fn idempotency_guard_statement(
             dialect.placeholder(14),
             dialect.placeholder(15),
             dialect.placeholder(16),
-            dialect.placeholder(17),
-            dialect.placeholder(18),
+            cast_placeholder(dialect, 17, SqlCast::Timestamp),
+            cast_placeholder(dialect, 18, SqlCast::Timestamp),
         ),
         vec![
             SqlBindValue::text(uuid()),
@@ -2012,7 +2033,7 @@ fn outbox_write_statement(
             dialect.placeholder(13),
             dialect.placeholder(14),
             dialect.placeholder(15),
-            dialect.placeholder(16),
+            cast_placeholder(dialect, 16, SqlCast::Timestamp),
         ),
         vec![
             SqlBindValue::text(uuid()),
@@ -2058,8 +2079,8 @@ fn dead_letter_write_statement(
             dialect.placeholder(11),
             dialect.placeholder(12),
             dialect.placeholder(13),
-            dialect.placeholder(14),
-            dialect.placeholder(15),
+            cast_placeholder(dialect, 14, SqlCast::Timestamp),
+            cast_placeholder(dialect, 15, SqlCast::Timestamp),
         ),
         vec![
             SqlBindValue::text(uuid()),

@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::blocking_device_pool::{BlockingDevicePool, DeviceDatabaseEngine, DeviceDbTransaction};
-use crate::dialect_sql::adapt_sqlite_placeholders;
+use crate::dialect_sql::{adapt_placeholders_with_casts, adapt_sqlite_placeholders, SqlCast};
 use crate::row_decode::{read_postgres_optional_timestamp, read_sqlite_optional_timestamp};
 use crate::row_id_allocator::allocate_row_id;
 use crate::schema::ensure_device_schema;
@@ -904,9 +904,14 @@ impl AiotCommandRepository for SqlxDeviceRepository {
                     ));
                 }
 
-                let insert_sql = adapt_sqlite_placeholders(
+                let insert_sql = adapt_placeholders_with_casts(
                     dialect,
                     "INSERT INTO iot_command (id, uuid, tenant_id, organization_id, data_scope, command_id, device_id, session_id, capability_name, command_name, request_payload, request_media_resource_id, request_object_blob_id, request_media_resource_snapshot, status, idempotency_key, timeout_at, ack_at, result_at, trace_id, created_at, updated_at, version, created_by, updated_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, NULL, NULL, ?18, ?19, ?20, 0, ?21, ?22)",
+                    &[
+                        (17, SqlCast::Timestamp),
+                        (19, SqlCast::Timestamp),
+                        (20, SqlCast::Timestamp),
+                    ],
                 );
                 match &mut tx {
                     DeviceDbTransaction::Sqlite(connection) => {
@@ -1148,9 +1153,10 @@ impl AiotCommandRepository for SqlxDeviceRepository {
                                 )?;
                                 if current_status_code != command_status_code("cancelled") {
                                     let now = default_timestamp().to_string();
-                                    let update_sql = adapt_sqlite_placeholders(
+                                    let update_sql = adapt_placeholders_with_casts(
                                         dialect,
                                         "UPDATE iot_command SET status = ?1, updated_at = ?2 WHERE id = ?3",
+                                        &[(2, SqlCast::Timestamp)],
                                     );
                                     sqlx::query(sqlx::AssertSqlSafe(update_sql.as_str()))
                                         .bind(command_status_code("cancelled"))
@@ -1184,9 +1190,10 @@ impl AiotCommandRepository for SqlxDeviceRepository {
                                 )?;
                                 if current_status_code != command_status_code("cancelled") {
                                     let now = default_timestamp().to_string();
-                                    let update_sql = adapt_sqlite_placeholders(
+                                    let update_sql = adapt_placeholders_with_casts(
                                         dialect,
                                         "UPDATE iot_command SET status = ?1, updated_at = ?2 WHERE id = ?3",
+                                        &[(2, SqlCast::Timestamp)],
                                     );
                                     sqlx::query(sqlx::AssertSqlSafe(update_sql.as_str()))
                                         .bind(command_status_code("cancelled"))
@@ -1344,10 +1351,11 @@ impl AiotCommandDeliveryRepository for SqlxDeviceRepository {
         let updated = self
             .db
             .run_owned(|pool| async move {
-                let sql = pool.adapt_sql(
+                let sql = pool.adapt_sql_with_casts(
                     "UPDATE iot_command_delivery
                      SET delivery_state = 'delivered', updated_at = ?1
                      WHERE tenant_id = ?2 AND organization_id = ?3 AND command_id = ?4 AND status = 1",
+                    &[(1, SqlCast::Timestamp)],
                 );
                 let rows = match pool.engine() {
                     DeviceDatabaseEngine::Sqlite => {
@@ -1489,9 +1497,10 @@ impl AiotDeviceSessionRepository for SqlxDeviceRepository {
                             match existing_status {
                                 Some(status) if status == disconnected_status => Ok(false),
                                 Some(_) => {
-                                    let update_sql = adapt_sqlite_placeholders(
+                                    let update_sql = adapt_placeholders_with_casts(
                                         dialect,
                                         "UPDATE iot_device_session SET status = ?1, disconnected_at = ?2, updated_at = ?2 WHERE tenant_id = ?3 AND organization_id = ?4 AND device_id = ?5 AND session_id = ?6",
+                                        &[(2, SqlCast::Timestamp)],
                                     );
                                     let DeviceDbTransaction::Sqlite(connection) = &mut tx else {
                                         unreachable!("sqlite disconnect_session update")
@@ -1513,9 +1522,10 @@ impl AiotDeviceSessionRepository for SqlxDeviceRepository {
                                             .await?;
                                     let session_uuid = format!("session-{session_id}");
                                     let connection_id = format!("connection-{session_id}");
-                                    let insert_sql = adapt_sqlite_placeholders(
+                                    let insert_sql = adapt_placeholders_with_casts(
                                         dialect,
                                         "INSERT INTO iot_device_session (id, uuid, tenant_id, organization_id, data_scope, device_id, session_id, connection_id, protocol_id, adapter_id, node_id, status, connected_at, last_seen_at, disconnected_at, created_at, updated_at, version) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'xiaozhi.websocket', 'xiaozhi', NULL, ?9, ?10, ?10, ?10, ?10, ?10, 0)",
+                                        &[(10, SqlCast::Timestamp)],
                                     );
                                     let DeviceDbTransaction::Sqlite(connection) = &mut tx else {
                                         unreachable!("sqlite disconnect_session insert")
@@ -1554,9 +1564,10 @@ impl AiotDeviceSessionRepository for SqlxDeviceRepository {
                             match existing_status {
                                 Some(status) if status == disconnected_status => Ok(false),
                                 Some(_) => {
-                                    let update_sql = adapt_sqlite_placeholders(
+                                    let update_sql = adapt_placeholders_with_casts(
                                         dialect,
                                         "UPDATE iot_device_session SET status = ?1, disconnected_at = ?2, updated_at = ?2 WHERE tenant_id = ?3 AND organization_id = ?4 AND device_id = ?5 AND session_id = ?6",
+                                        &[(2, SqlCast::Timestamp)],
                                     );
                                     let DeviceDbTransaction::Postgres(connection) = &mut tx else {
                                         unreachable!("postgres disconnect_session update")
@@ -1578,9 +1589,10 @@ impl AiotDeviceSessionRepository for SqlxDeviceRepository {
                                             .await?;
                                     let session_uuid = format!("session-{session_id}");
                                     let connection_id = format!("connection-{session_id}");
-                                    let insert_sql = adapt_sqlite_placeholders(
+                                    let insert_sql = adapt_placeholders_with_casts(
                                         dialect,
                                         "INSERT INTO iot_device_session (id, uuid, tenant_id, organization_id, data_scope, device_id, session_id, connection_id, protocol_id, adapter_id, node_id, status, connected_at, last_seen_at, disconnected_at, created_at, updated_at, version) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'xiaozhi.websocket', 'xiaozhi', NULL, ?9, ?10, ?10, ?10, ?10, ?10, 0)",
+                                        &[(10, SqlCast::Timestamp)],
                                     );
                                     let DeviceDbTransaction::Postgres(connection) = &mut tx else {
                                         unreachable!("postgres disconnect_session insert")
@@ -1714,9 +1726,10 @@ impl AiotEventRepository for SqlxDeviceRepository {
                     .event_id
                     .unwrap_or_else(|| format!("evt-{}-{:04}", command.device_id, row_id));
 
-                let insert_sql = adapt_sqlite_placeholders(
+                let insert_sql = adapt_placeholders_with_casts(
                     dialect,
                     "INSERT INTO iot_device_event (id, uuid, tenant_id, organization_id, data_scope, device_id, event_type, event_payload, media_resource_id, object_blob_id, media_resource_snapshot, status, created_at, updated_at, version) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 1, ?12, ?13, 0)",
+                    &[(12, SqlCast::Timestamp), (13, SqlCast::Timestamp)],
                 );
                 match &mut tx {
                     DeviceDbTransaction::Sqlite(connection) => {
@@ -2074,9 +2087,14 @@ impl AiotDeviceTwinRepository for SqlxDeviceRepository {
                         } else {
                             existing_reported_version
                         };
-                        let update_sql = adapt_sqlite_placeholders(
+                        let update_sql = adapt_placeholders_with_casts(
                             dialect,
                             "UPDATE iot_device_twin_property SET desired_value = ?1, desired_version = ?2, desired_updated_at = ?3, reported_value = ?4, reported_version = ?5, reported_updated_at = ?6, updated_at = ?7 WHERE id = ?8",
+                            &[
+                                (3, SqlCast::Timestamp),
+                                (6, SqlCast::Timestamp),
+                                (7, SqlCast::Timestamp),
+                            ],
                         );
                         match &mut tx {
                             DeviceDbTransaction::Sqlite(connection) => {
@@ -2115,9 +2133,15 @@ impl AiotDeviceTwinRepository for SqlxDeviceRepository {
                                         AiotDeviceTwinRepositoryError::PersistenceFailure,
                                     )
                                 })?;
-                        let insert_sql = adapt_sqlite_placeholders(
+                        let insert_sql = adapt_placeholders_with_casts(
                             dialect,
                             "INSERT INTO iot_device_twin_property (id, uuid, tenant_id, organization_id, data_scope, device_id, property_name, desired_value, desired_version, desired_updated_at, reported_value, reported_version, reported_updated_at, status, created_at, updated_at, version) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 1, ?14, ?15, 0)",
+                            &[
+                                (10, SqlCast::Timestamp),
+                                (13, SqlCast::Timestamp),
+                                (14, SqlCast::Timestamp),
+                                (15, SqlCast::Timestamp),
+                            ],
                         );
                         match &mut tx {
                             DeviceDbTransaction::Sqlite(connection) => {
@@ -2709,9 +2733,10 @@ async fn ensure_twin_root_row(
     }
 
     let twin_row_id = allocate_row_id(tx, dialect, "iot_device_twin").await?;
-    let insert_sql = adapt_sqlite_placeholders(
+    let insert_sql = adapt_placeholders_with_casts(
         dialect,
         "INSERT INTO iot_device_twin (id, uuid, tenant_id, organization_id, data_scope, device_id, desired_version, reported_version, status, created_at, updated_at, version) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, 1, ?7, ?8, 0)",
+        &[(7, SqlCast::Timestamp), (8, SqlCast::Timestamp)],
     );
     match tx {
         DeviceDbTransaction::Sqlite(connection) => {
@@ -2782,9 +2807,10 @@ async fn recompute_twin_versions(
         }
     };
 
-    let update_sql = adapt_sqlite_placeholders(
+    let update_sql = adapt_placeholders_with_casts(
         dialect,
         "UPDATE iot_device_twin SET desired_version = ?1, reported_version = ?2, updated_at = ?3 WHERE tenant_id = ?4 AND organization_id = ?5 AND device_id = ?6",
+        &[(3, SqlCast::Timestamp)],
     );
     match tx {
         DeviceDbTransaction::Sqlite(connection) => {
@@ -2823,9 +2849,10 @@ async fn insert_command_delivery_row(
 ) -> Result<(i64, String), sqlx::Error> {
     let delivery_id = allocate_row_id(tx, dialect, "iot_command_delivery").await?;
     let delivery_uuid = format!("cmd-delivery-{delivery_id}");
-    let insert_sql = adapt_sqlite_placeholders(
+    let insert_sql = adapt_placeholders_with_casts(
         dialect,
         "INSERT INTO iot_command_delivery (id, uuid, tenant_id, organization_id, data_scope, command_id, session_id, delivery_state, status, created_at, updated_at, version) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'pending', 1, ?8, ?8, 0)",
+        &[(8, SqlCast::Timestamp)],
     );
     match tx {
         DeviceDbTransaction::Sqlite(connection) => {
@@ -2889,9 +2916,10 @@ async fn insert_command_delivery_and_outbox(
     })
     .to_string();
     let outbox_uuid = uuid();
-    let insert_outbox_sql = adapt_sqlite_placeholders(
+    let insert_outbox_sql = adapt_placeholders_with_casts(
         dialect,
         "INSERT INTO iot_outbox_event (id, uuid, tenant_id, organization_id, data_scope, event_id, event_type, event_version, aggregate_type, aggregate_id, payload, payload_hash, status, trace_id, attempt_count, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, '1', ?8, ?9, ?10, NULL, ?11, ?12, 0, ?13)",
+        &[(13, SqlCast::Timestamp)],
     );
     match tx {
         DeviceDbTransaction::Sqlite(connection) => {

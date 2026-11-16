@@ -8,7 +8,7 @@ use sdkwork_aiot_storage::{
 use sqlx::Row;
 
 use crate::blocking_device_pool::{BlockingDevicePool, DeviceDatabaseEngine, DeviceDbTransaction};
-use crate::dialect_sql::adapt_sqlite_placeholders;
+use crate::dialect_sql::{adapt_placeholders_with_casts, adapt_sqlite_placeholders, SqlCast};
 use crate::schema::ensure_device_schema;
 use crate::sqlite_sync::{sqlite_connect_url, BlockingSqlitePool};
 use crate::SqlDialect;
@@ -75,13 +75,14 @@ impl OutboxEventRepository for SqlxOutboxEventRepository {
                 let now = now.clone();
                 let lease_until = lease_until.clone();
                 Box::pin(async move {
-                    let reclaim_sql = adapt_sqlite_placeholders(
+                    let reclaim_sql = adapt_placeholders_with_casts(
                         dialect,
                         "UPDATE iot_outbox_event
                          SET status = ?1, next_attempt_at = NULL
                          WHERE status = ?2
                            AND next_attempt_at IS NOT NULL
                            AND next_attempt_at <= ?3",
+                        &[(3, SqlCast::Timestamp)],
                     );
                     match &mut tx {
                         DeviceDbTransaction::Sqlite(connection) => {
@@ -126,13 +127,14 @@ impl OutboxEventRepository for SqlxOutboxEventRepository {
                         }
                     }
 
-                    let select_sql = adapt_sqlite_placeholders(
+                    let select_sql = adapt_placeholders_with_casts(
                         dialect,
                         "SELECT tenant_id, organization_id, event_id, event_type, event_version, aggregate_type, aggregate_id, payload, trace_id, attempt_count
                          FROM iot_outbox_event
                          WHERE status = ?1 AND next_attempt_at = ?2
                          ORDER BY created_at ASC
                          LIMIT ?3",
+                        &[(2, SqlCast::Timestamp)],
                     );
                     match &mut tx {
                         DeviceDbTransaction::Sqlite(connection) => {
@@ -176,11 +178,12 @@ impl OutboxEventRepository for SqlxOutboxEventRepository {
             .db
             .run_owned(|pool| async move {
                 let dialect = pool.dialect();
-                let sql = adapt_sqlite_placeholders(
+                let sql = adapt_placeholders_with_casts(
                     dialect,
                     "UPDATE iot_outbox_event
                      SET status = ?1, published_at = ?2, next_attempt_at = NULL
                      WHERE tenant_id = ?3 AND event_id = ?4 AND status = ?5",
+                    &[(2, SqlCast::Timestamp)],
                 );
                 let changed: i64 = match pool.engine() {
                     DeviceDatabaseEngine::Sqlite => sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
@@ -266,11 +269,12 @@ impl OutboxEventRepository for SqlxOutboxEventRepository {
                     } else {
                         OUTBOX_STATUS_PENDING
                     };
-                    let update_sql = adapt_sqlite_placeholders(
+                    let update_sql = adapt_placeholders_with_casts(
                         dialect,
                         "UPDATE iot_outbox_event
                          SET attempt_count = ?1, next_attempt_at = ?2, status = ?3
                          WHERE tenant_id = ?4 AND event_id = ?5 AND status = ?6",
+                        &[(2, SqlCast::Timestamp)],
                     );
                     let changed: i64 = match &mut tx {
                         DeviceDbTransaction::Sqlite(connection) => {
@@ -335,7 +339,11 @@ fn outbox_claim_sql(dialect: SqlDialect) -> String {
              )"
         }
     };
-    adapt_sqlite_placeholders(dialect, sql)
+    adapt_placeholders_with_casts(
+        dialect,
+        sql,
+        &[(2, SqlCast::Timestamp), (4, SqlCast::Timestamp)],
+    )
 }
 
 fn row_to_pending_event(row: &sqlx::sqlite::SqliteRow) -> Option<AiotOutboxPendingEvent> {
