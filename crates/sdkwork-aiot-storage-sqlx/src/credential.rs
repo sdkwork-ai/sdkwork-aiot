@@ -8,7 +8,7 @@ use sdkwork_utils_rust::is_blank;
 
 use crate::blocking_device_pool::{BlockingDevicePool, DeviceDatabaseEngine, DeviceDbTransaction};
 use crate::credential_hash::{hash_device_credential_secret, verify_device_credential_secret};
-use crate::dialect_sql::adapt_sqlite_placeholders;
+use crate::dialect_sql::{adapt_placeholders_with_casts, adapt_sqlite_placeholders, SqlCast};
 use crate::row_id_allocator::allocate_row_id;
 use crate::schema::ensure_device_schema;
 use crate::sqlite_sync::{sqlite_connect_url, BlockingSqlitePool};
@@ -127,7 +127,8 @@ impl SqlxCredentialRepository {
                 if organization_id.is_some() {
                     query.push_str(" AND organization_id = ?5");
                 }
-                let query = adapt_sqlite_placeholders(dialect, &query);
+                let query =
+                    adapt_placeholders_with_casts(dialect, &query, &[(3, SqlCast::Timestamp)]);
 
                 match pool.engine() {
                     DeviceDatabaseEngine::Sqlite => {
@@ -196,13 +197,14 @@ impl SqlxCredentialRepository {
         self.db
             .run_owned(|pool| async move {
                 let dialect = pool.dialect();
-                let sql = adapt_sqlite_placeholders(
+                let sql = adapt_placeholders_with_casts(
                     dialect,
                     "SELECT tenant_id, organization_id, credential_hash
                  FROM iot_device_credential
                  WHERE device_id = ?1
                    AND status = ?2
                    AND (expires_at IS NULL OR expires_at > ?3)",
+                    &[(3, SqlCast::Timestamp)],
                 );
                 match pool.engine() {
                     DeviceDatabaseEngine::Sqlite => {
@@ -268,12 +270,13 @@ impl SqlxCredentialRepository {
         self.db
             .run_owned(|pool| async move {
                 let dialect = pool.dialect();
-                let sql = adapt_sqlite_placeholders(
+                let sql = adapt_placeholders_with_casts(
                     dialect,
                     "SELECT COUNT(1) FROM iot_device_credential
                  WHERE device_id = ?1
                    AND status = ?2
                    AND (expires_at IS NULL OR expires_at > ?3)",
+                    &[(3, SqlCast::Timestamp)],
                 );
                 let count: i64 = match pool.engine() {
                     DeviceDatabaseEngine::Sqlite => {
@@ -312,13 +315,18 @@ impl SqlxCredentialRepository {
                     let issued_secret = generate_device_secret(&command.device_id, next_id);
                     let credential_hash = hash_device_credential_secret(issued_secret.as_bytes());
 
-                    let insert_sql = adapt_sqlite_placeholders(
+                    let insert_sql = adapt_placeholders_with_casts(
                         dialect,
                         "INSERT INTO iot_device_credential (
                             id, uuid, tenant_id, organization_id, data_scope, device_id,
                             credential_type, credential_hash, credential_ref, expires_at,
                             status, created_at, updated_at, version
                         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 0)",
+                        &[
+                            (10, SqlCast::Timestamp),
+                            (12, SqlCast::Timestamp),
+                            (13, SqlCast::Timestamp),
+                        ],
                     );
                     match &mut tx {
                         DeviceDbTransaction::Sqlite(connection) => {
@@ -519,11 +527,12 @@ impl SqlxCredentialRepository {
             .db
             .run_owned(|pool| async move {
                 let dialect = pool.dialect();
-                let sql = adapt_sqlite_placeholders(
+                let sql = adapt_placeholders_with_casts(
                     dialect,
                     "UPDATE iot_device_credential
                      SET status = ?1, updated_at = ?2
                      WHERE tenant_id = ?3 AND organization_id = ?4 AND device_id = ?5 AND uuid = ?6",
+                    &[(2, SqlCast::Timestamp)],
                 );
                 let result = match pool.engine() {
                     DeviceDatabaseEngine::Sqlite => {

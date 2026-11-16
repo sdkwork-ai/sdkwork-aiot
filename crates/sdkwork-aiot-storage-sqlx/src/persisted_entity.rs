@@ -2,7 +2,7 @@ use sdkwork_aiot_storage::{AiotOffsetListResult, AiotStorageAssociation, OffsetL
 use sqlx::Row;
 
 use crate::blocking_device_pool::{BlockingDevicePool, DeviceDatabaseEngine, DeviceDbTransaction};
-use crate::dialect_sql::adapt_sqlite_placeholders;
+use crate::dialect_sql::{adapt_placeholders_with_casts, adapt_sqlite_placeholders, SqlCast};
 use crate::row_id_allocator::allocate_row_id;
 use crate::schema::ensure_device_schema;
 use crate::sqlite_sync::{sqlite_connect_url, BlockingSqlitePool};
@@ -107,11 +107,12 @@ impl PersistedEntityRepository {
         self.db
             .with_device_transaction(|mut tx, dialect| {
                 Box::pin(async move {
-                    let update_sql = adapt_sqlite_placeholders(
+                    let update_sql = adapt_placeholders_with_casts(
                         dialect,
                         "UPDATE iot_admin_entity
                          SET payload_json = ?1, updated_at = ?2, status = ?3
                          WHERE tenant_id = ?4 AND organization_id = ?5 AND entity_kind = ?6 AND entity_key = ?7",
+                        &[(2, SqlCast::Timestamp)],
                     );
                     let updated = match &mut tx {
                         DeviceDbTransaction::Sqlite(connection) => {
@@ -147,12 +148,13 @@ impl PersistedEntityRepository {
 
                     let next_id = allocate_row_id(&mut tx, dialect, "iot_admin_entity").await?;
                     let uuid = sdkwork_utils_rust::uuid();
-                    let insert_sql = adapt_sqlite_placeholders(
+                    let insert_sql = adapt_placeholders_with_casts(
                         dialect,
                         "INSERT INTO iot_admin_entity (
                             id, uuid, tenant_id, organization_id, data_scope, entity_kind, entity_key,
                             payload_json, status, created_at, updated_at, version
                         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0)",
+                        &[(10, SqlCast::Timestamp), (11, SqlCast::Timestamp)],
                     );
                     match &mut tx {
                         DeviceDbTransaction::Sqlite(connection) => {
@@ -377,11 +379,12 @@ impl PersistedEntityRepository {
             .db
             .run_owned(|pool| async move {
                 let dialect = pool.dialect();
-                let sql = adapt_sqlite_placeholders(
+                let sql = adapt_placeholders_with_casts(
                     dialect,
                     "UPDATE iot_admin_entity
                      SET status = 0, updated_at = ?1
                      WHERE tenant_id = ?2 AND organization_id = ?3 AND entity_kind = ?4 AND entity_key = ?5 AND status = ?6",
+                    &[(1, SqlCast::Timestamp)],
                 );
                 let updated: u64 = match pool.engine() {
                     DeviceDatabaseEngine::Sqlite => {
@@ -446,9 +449,7 @@ fn row_to_entity_record_postgres(
 /// rejects it with `date/time field value out of range`, which rolled back
 /// every catalog entity write and left the product catalog permanently empty.
 fn current_timestamp() -> String {
-    chrono::Utc::now()
-        .format("%Y-%m-%dT%H:%M:%SZ")
-        .to_string()
+    chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 
 #[cfg(test)]
@@ -463,7 +464,10 @@ mod tests {
             20,
             "timestamp must be YYYY-MM-DDTHH:MM:SSZ, got {timestamp}"
         );
-        assert!(timestamp.ends_with('Z'), "timestamp must be UTC: {timestamp}");
+        assert!(
+            timestamp.ends_with('Z'),
+            "timestamp must be UTC: {timestamp}"
+        );
         assert_eq!(&timestamp[4..5], "-");
         assert_eq!(&timestamp[7..8], "-");
         assert_eq!(&timestamp[10..11], "T");

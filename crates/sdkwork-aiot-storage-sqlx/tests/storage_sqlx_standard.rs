@@ -1120,6 +1120,90 @@ fn sql_protocol_ingest_planner_renders_postgres_and_sqlite_dialects() {
 }
 
 #[test]
+fn sql_device_planner_casts_text_instants_for_postgres() {
+    // Regression: PostgreSQL types a parameter from the Rust value that is bound,
+    // so the ISO-8601 `String` instants and `SqlBindValue::Null` bigints used by
+    // the device statements were TEXT parameters. The server rejected the write
+    // at parse time ("column ... is of type timestamp without time zone but
+    // expression is of type text") and the console saw an opaque 50001 on
+    // `POST /backend/v3/api/iot/devices`.
+    use sdkwork_aiot_storage::AiotDeviceRecord;
+    use sdkwork_aiot_storage_sqlx::SqlDeviceRepositoryPlanner;
+
+    let record = AiotDeviceRecord {
+        id: "1".to_string(),
+        tenant_id: 100001,
+        organization_id: 0,
+        owner_type: "device".to_string(),
+        owner_id: "100001:0:cast-device-001".to_string(),
+        device_id: "cast-device-001".to_string(),
+        display_name: "Cast Device".to_string(),
+        product_id: "1008".to_string(),
+        client_id: None,
+        chip_family: None,
+        status: "active".to_string(),
+        metadata_json: None,
+        last_seen_at: "2026-01-01T00:00:00Z".to_string(),
+    };
+
+    let postgres = SqlDeviceRepositoryPlanner::with_dialect(SqlDialect::Postgres)
+        .plan_create_device(&record)
+        .expect("plan postgres device create");
+    let sqlite = SqlDeviceRepositoryPlanner::with_dialect(SqlDialect::Sqlite)
+        .plan_create_device(&record)
+        .expect("plan sqlite device create");
+
+    let create_sql = &postgres.statements[0].sql;
+    assert!(
+        create_sql.contains("$15::TIMESTAMP"),
+        "last_seen_at: {create_sql}"
+    );
+    assert!(
+        create_sql.contains("$18::TIMESTAMP"),
+        "created_at: {create_sql}"
+    );
+    assert!(
+        create_sql.contains("$19::TIMESTAMP"),
+        "updated_at: {create_sql}"
+    );
+    assert!(
+        create_sql.contains("$21::BIGINT"),
+        "created_by: {create_sql}"
+    );
+    assert!(
+        create_sql.contains("$22::BIGINT"),
+        "updated_by: {create_sql}"
+    );
+
+    let update_sql = &SqlDeviceRepositoryPlanner::with_dialect(SqlDialect::Postgres)
+        .plan_update_device(&record)
+        .expect("plan postgres device update")
+        .statements[0]
+        .sql;
+    assert!(
+        update_sql.contains("updated_at = $6::TIMESTAMP"),
+        "device update: {update_sql}"
+    );
+
+    // SQLite is dynamically typed: no casts, and the anonymous `?` marker must be
+    // kept so bind positions cannot shift.
+    let sqlite_sql = &sqlite.statements[0].sql;
+    assert!(
+        !sqlite_sql.contains("::"),
+        "sqlite must not cast: {sqlite_sql}"
+    );
+    assert!(
+        !sqlite_sql.contains('$'),
+        "sqlite keeps ? markers: {sqlite_sql}"
+    );
+    assert_eq!(
+        postgres.statements[0].binds.len(),
+        sqlite.statements[0].binds.len(),
+        "both dialects bind the same values"
+    );
+}
+
+#[test]
 fn sql_protocol_ingest_planner_writes_appbase_association_fields() {
     let command = AiotProtocolStorageCommand::new(
         "mqtt.v5",

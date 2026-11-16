@@ -5,7 +5,7 @@ use std::pin::Pin;
 
 use sqlx::{PgConnection, Sqlite, SqliteConnection, Transaction};
 
-use crate::dialect_sql::adapt_sqlite_placeholders;
+use crate::dialect_sql::{adapt_placeholders_with_casts, adapt_sqlite_placeholders, SqlCast};
 use crate::postgres_sync::{self, BlockingPostgresPool, StoragePostgresError};
 use crate::sqlite_sync::{self, BlockingSqlitePool, StorageSqliteError};
 use crate::{SqlDialect, SqlStatementBatch, SqlStatementPlan};
@@ -77,6 +77,11 @@ impl BlockingDevicePool {
 
     pub fn adapt_sql(&self, sql: &str) -> String {
         adapt_sqlite_placeholders(self.dialect(), sql)
+    }
+
+    /// Adapts placeholders and casts the listed binds for PostgreSQL.
+    pub fn adapt_sql_with_casts(&self, sql: &str, casts: &[(usize, SqlCast)]) -> String {
+        adapt_placeholders_with_casts(self.dialect(), sql, casts)
     }
 
     pub fn block_on<F, T>(&self, future: F) -> T
