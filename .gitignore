@@ -98,3 +98,6 @@ sdks/**/*-typescript/src/*.js
 sdks/**/*-typescript/src/*.js.map
 sdks/**/*-typescript/src/*.d.ts
 sdks/**/*-typescript/src/*.d.ts.map
+
+# Release build outputs (large packaged archives produced by the release pipeline)
+artifacts/release/
