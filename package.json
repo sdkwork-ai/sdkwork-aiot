@@ -35,7 +35,7 @@
     "gateway:package": "pnpm gateway:package:standalone",
     "gateway:validate": "pnpm gateway:validate:standalone",
     "gateway:plan": "pnpm topology:plan",
-    "release:build": "pnpm exec sdkwork-app release:build",
+    "release:build": "pnpm run check:release-access-token:require-anchor && pnpm exec sdkwork-app release:build",
     "release:validate": "pnpm exec sdkwork-app release:validate",
     "release:publish": "pnpm exec sdkwork-app release:publish",
     "release:plan": "pnpm exec sdkwork-app release:plan",
@@ -81,7 +81,7 @@
     "check:gateway-alignment": "node ../sdkwork-specs/tools/audit-gateway-alignment-repo.mjs --root . --strict",
     "check:cloud-gateway-boundary": "node ../sdkwork-specs/tools/check-application-cloud-gateway-boundary.mjs --root .",
     "check:single-http-ingress": "node ../sdkwork-specs/tools/check-single-http-ingress.mjs --root .",
-    "release:package": "pnpm exec sdkwork-app release:package",
+    "release:package": "pnpm run check:release-access-token:require-anchor && pnpm exec sdkwork-app release:package",
     "test:contract:database": "node ../sdkwork-specs/tools/check-database-framework-standard.mjs --root .",
     "check:app-composition": "node ../sdkwork-specs/tools/verify-repo.mjs --root .",
     "gateway:run:standalone": "cargo run -p sdkwork-api-aiot-standalone-gateway --bin sdkwork-api-aiot-standalone-gateway",
@@ -141,7 +141,8 @@
     "build:pc:test:cloud": "node ../sdkwork-specs/tools/build-browser-client.mjs --root . --architecture pc --environment test --deployment-profile cloud",
     "build:pc:staging:cloud": "node ../sdkwork-specs/tools/build-browser-client.mjs --root . --architecture pc --environment staging --deployment-profile cloud",
     "build:pc:demo:cloud": "node ../sdkwork-specs/tools/build-browser-client.mjs --root . --architecture pc --environment demo --deployment-profile cloud",
-    "build:pc:prod:cloud": "node ../sdkwork-specs/tools/build-browser-client.mjs --root . --architecture pc --environment prod --deployment-profile cloud"
+    "build:pc:prod:cloud": "node ../sdkwork-specs/tools/build-browser-client.mjs --root . --architecture pc --environment prod --deployment-profile cloud",
+    "check:release-access-token:require-anchor": "node ../sdkwork-specs/tools/check-release-access-token-env.mjs --root . --require-anchor"
   },
   "exports": {
     ".": {
