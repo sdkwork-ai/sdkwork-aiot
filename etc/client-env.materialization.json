@@ -99,7 +99,7 @@
         "VITE_SDKWORK_RUNTIME_TARGET"
       ],
       "accessToken": {
-        "appId": "sdkwork-aiot-h5",
+        "appIdEnv": "SDKWORK_DEPLOY_APPLICATION_ID",
         "tenantId": "100001",
         "organizationId": "0",
         "permissionScope": [
@@ -175,7 +175,7 @@
         "VITE_SDKWORK_RUNTIME_TARGET"
       ],
       "accessToken": {
-        "appId": "sdkwork-aiot-pc",
+        "appIdEnv": "SDKWORK_DEPLOY_APPLICATION_ID",
         "tenantId": "100001",
         "organizationId": "0",
         "permissionScope": [
@@ -190,7 +190,7 @@
       "runtimeTarget": "mini-program",
       "bindings": {},
       "accessToken": {
-        "appId": "sdkwork-aiot-mini-program",
+        "appIdEnv": "SDKWORK_DEPLOY_APPLICATION_ID",
         "tenantId": "100001",
         "organizationId": "0",
         "permissionScope": [
