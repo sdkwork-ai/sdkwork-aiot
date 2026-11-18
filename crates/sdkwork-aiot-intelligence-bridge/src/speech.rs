@@ -12,7 +12,7 @@ use crate::session_map::SessionMap;
 
 const DEFAULT_XIAOZHI_FRAME_DURATION_MS: u32 = 60;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct SpeechTurnInput {
     pub xiaozhi_session_id: String,
     pub user_text: Option<String>,
@@ -20,6 +20,17 @@ pub struct SpeechTurnInput {
     pub asr_wav_bytes: Option<Vec<u8>>,
     pub uplink_sample_rate: Option<u32>,
     pub uplink_frame_duration_ms: Option<u32>,
+    /// Tenant/owner attribution of the authenticated device behind this turn.
+    ///
+    /// Attribution only: the device edge authenticates a device bearer and holds
+    /// no end-user session tokens, so the cloud-router dispatch keeps the
+    /// deployment's declared service identity
+    /// (`APP_SDK_INTEGRATION_SPEC.md` §5.2.1.1). The ids come from the device
+    /// association resolved at the WebSocket handshake.
+    pub tenant_id: Option<i64>,
+    pub organization_id: Option<i64>,
+    pub user_id: Option<i64>,
+    pub device_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -254,11 +265,7 @@ mod tests {
         let err = pipeline
             .run_turn(SpeechTurnInput {
                 xiaozhi_session_id: "s1".to_string(),
-                user_text: None,
-                audio_bytes: None,
-                asr_wav_bytes: None,
-                uplink_sample_rate: None,
-                uplink_frame_duration_ms: None,
+                ..Default::default()
             })
             .unwrap_err();
         assert!(err.contains("requires"));

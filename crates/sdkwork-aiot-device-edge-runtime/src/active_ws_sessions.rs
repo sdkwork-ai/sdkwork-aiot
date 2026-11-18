@@ -76,6 +76,20 @@ pub fn touch_active_ws_session(device_id: &str) {
     }
 }
 
+/// Device id and tenant/owner attribution of a live WebSocket session.
+///
+/// The handshake resolves the device association once; the speech turn reads it
+/// back by protocol session id so attribution does not depend on the transport
+/// layer carrying the HTTP request.
+pub fn association_for_ws_session_id(session_id: &str) -> Option<(String, AiotStorageAssociation)> {
+    store().lock().ok().and_then(|guard| {
+        guard
+            .iter()
+            .find(|(_, session)| session.session_id == session_id)
+            .map(|(device_id, session)| (device_id.clone(), session.association.clone()))
+    })
+}
+
 /// Protocol session id of the live WebSocket session for a device, if any.
 pub fn active_ws_session_id(device_id: &str) -> Option<String> {
     store().lock().ok().and_then(|guard| {
@@ -144,6 +158,27 @@ mod tests {
             Some("session-test")
         );
         unregister_active_ws_session("dev-test");
+    }
+
+    #[test]
+    fn session_lookup_returns_the_device_attribution() {
+        unregister_active_ws_session("dev-attr");
+        let (sender, _receiver) = std::sync::mpsc::channel();
+        let association = AiotStorageAssociation {
+            tenant_id: 7,
+            organization_id: 8,
+            user_id: Some(9),
+            ..Default::default()
+        };
+        register_active_ws_session("dev-attr", "session-attr", sender, association);
+        let (device_id, association) =
+            association_for_ws_session_id("session-attr").expect("live session");
+        assert_eq!(device_id, "dev-attr");
+        assert_eq!(association.tenant_id, 7);
+        assert_eq!(association.organization_id, 8);
+        assert_eq!(association.user_id, Some(9));
+        assert!(association_for_ws_session_id("session-missing").is_none());
+        unregister_active_ws_session("dev-attr");
     }
 
     #[test]

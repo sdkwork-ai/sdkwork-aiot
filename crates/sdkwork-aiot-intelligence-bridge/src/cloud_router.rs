@@ -1,3 +1,9 @@
+// identity:service - a device speech turn is machine work: the edge
+// authenticates a device bearer and holds no end-user session tokens, and the
+// cloud-router ASR/TTS endpoints take no tenant field. The deployment key is
+// therefore the declared identity; tenant/organization/user attribution travels
+// in SpeechTurnInput from the device association (APP_SDK_INTEGRATION_SPEC
+// section 5.2.1.1).
 use cloudrouter_open_sdk::{SdkworkAiClient, SdkworkError};
 use sdkwork_utils_rust::service_base_url::registry_base_url_or;
 use std::sync::Arc;

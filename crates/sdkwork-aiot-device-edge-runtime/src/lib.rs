@@ -2002,6 +2002,12 @@ fn xiaozhi_production_speech_turn_input(
     let profile = xiaozhi_ws_media_session::ws_media_profile(session_id);
     let asr_wav_bytes = xiaozhi_ws_media_session::take_ws_uplink_wav(session_id)
         .map_err(|error| TransportError::new(format!("intelligence.uplink.decode:{error}")))?;
+    // Attribution comes from the device association resolved at the WebSocket
+    // handshake; the turn itself authenticates with the declared machine
+    // identity (no end-user tokens exist at the edge).
+    let (device_id, association) = active_ws_sessions::association_for_ws_session_id(session_id)
+        .map(|(device_id, association)| (Some(device_id), Some(association)))
+        .unwrap_or_default();
     Ok(SpeechTurnInput {
         xiaozhi_session_id: session_id.to_string(),
         user_text: user_text
@@ -2012,6 +2018,10 @@ fn xiaozhi_production_speech_turn_input(
         asr_wav_bytes,
         uplink_sample_rate: Some(profile.sample_rate),
         uplink_frame_duration_ms: Some(profile.frame_duration_ms),
+        tenant_id: association.as_ref().map(|value| value.tenant_id),
+        organization_id: association.as_ref().map(|value| value.organization_id),
+        user_id: association.as_ref().and_then(|value| value.user_id),
+        device_id,
     })
 }
 
